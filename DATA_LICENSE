@@ -1,0 +1,11 @@
+TriPhysBench question annotations (the files in data/)
+
+Copyright (c) 2026 The TriPhysBench Authors
+
+The question annotations (questions, reference answers, reference solutions, sources and labels) are licensed under
+the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0):
+https://creativecommons.org/licenses/by-nc/4.0/
+
+The videos are not part of this release. EgoExo4D recordings are subject to the EgoExo4D license
+(https://ego-exo4d-data.org/), and Physics-aware-videos recordings to the terms of
+https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos.
