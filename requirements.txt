@@ -1,0 +1,14 @@
+# Tested environment (paper): Python 3.10, PyTorch 2.5.1 + CUDA 12.1, Transformers 5.17.0, PEFT 0.20.0, fla 0.3.2.
+# Install PyTorch for your CUDA version first (https://pytorch.org), then: pip install -r requirements.txt
+transformers==5.17.0
+peft==0.20.0
+accelerate
+qwen-vl-utils
+decord
+flash-linear-attention==0.3.2    # optional: fast Gated DeltaNet kernels for Qwen3.5 / Qwen3.6 (import name `fla`)
+httpx
+requests
+numpy
+opencv-python
+imageio-ffmpeg
+tqdm
