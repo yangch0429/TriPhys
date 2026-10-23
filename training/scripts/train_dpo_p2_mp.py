@@ -135,7 +135,7 @@ def main():
     ap.add_argument('--sft_ckpt', required=True)
     ap.add_argument('--data', required=True)
     ap.add_argument('--output', required=True)
-    ap.add_argument('--merged_dir', default=E + '/outputs/e17_merged')
+    ap.add_argument('--merged_dir', required=True)
     ap.add_argument('--base_model', default=MODEL_PATH)
     ap.add_argument('--max_length', type=int, default=16384)
     ap.add_argument('--epochs', type=int, default=2)
