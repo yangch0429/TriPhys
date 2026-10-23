@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""n1 eval (10/14): eval_sft_v9.py with the Qwen3.5 native tool format (user: "格式进行调整").
-Only changes vs eval_sft_v9: tools passed to the chat template (n1_tools.TOOLS, schema in the system turn), native XML
-tool calls parsed (JSON still accepted), --model_path none = untrained base model (no LoRA), full turns saved per row
-("turns": assistant / tool messages, for anchor samples and DPO). Decoding, rounds, tool execution, Serper, parsing and
-scoring are unchanged.
+"""Tool-use evaluation of the TriPhys models (LoRA adapter on a base model) and of the untrained base model, with the
+Qwen3.5 native tool format. Tools are passed to the chat template (n1_tools.TOOLS, schema in the system turn); tool
+calls are parsed from the native XML format (JSON is also accepted). --model_path none evaluates the base model without
+LoRA. Each output row stores the full turns ("turns": assistant / tool messages), which the data-building scripts reuse.
+Machine paths: training/scripts/srvpaths.py.
 
-SFT eval (machine paths: training/scripts/srvpaths.py).
+  - No oracle: the model must use real Serper web search
+  - No static fallback: Serper failures are logged to *_serper_failures.json
+  - Several <tool_call> blocks can be executed in one round
+  - question_id is passed to Serper for failure attribution
 
-v2 changes:
-  - No oracle: model must use real Serper web search
-  - No static fallback: Serper failures are logged to *_serper_failures.json for re-eval
-  - Multi-tool-per-round: each round can execute multiple <tool_call> blocks
-  - question_id passed to Serper for failure attribution
+Sampling variant: env GEN_TEMP sets the sampling temperature (default 0.1); SKIP_SCORE=1 skips judge scoring (the rows
+are scored offline afterwards, e.g. with p1_rescore_samples.py).
 """
 import os
 os.environ["FORCE_QWENVL_VIDEO_READER"] = "decord"
@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 GEN_PARAMS = dict(do_sample=True, temperature=float(os.environ.get("GEN_TEMP", "0.1")), top_p=0.9, top_k=20, repetition_penalty=1.05)
 MAX_TOKENS = 8192   # per-round limit
 
-# [recovered_server] 20 Serper key literals removed; read from env (comma-separated)
+# Serper keys: env SERPER_API_KEYS (comma-separated) or SERPER_API_KEY
 SERPER_KEYS = [k for k in os.environ.get('SERPER_API_KEYS', os.environ.get('SERPER_API_KEY', '')).split(',') if k]
 _serper_key_idx = [0]
 
@@ -129,7 +129,7 @@ class SFTEvaluator:
             g["np"] = g["numpy"] = np
         except ImportError:
             pass
-        # 10/19: p2s_ep1 shard 4 hung 4.5 h in model code (100% CPU, no output) -> 60 s wall-clock limit per call
+        # 60 s wall-clock limit per call, so that model-written code that never returns cannot stall a shard
         import signal, threading
         use_alarm = threading.current_thread() is threading.main_thread()
         def _to(signum, frame):
@@ -280,11 +280,11 @@ async def evaluate_aclass(evaluator: SFTEvaluator, data_path: str, output_path: 
                 "annotated_solution": qa.get("annotated_solution", []),
                 "question": qa["question"],
                 "question_type": qa["question_type"],
-                # LLM fallback fields (same as experiment_right baseline)
+                # LLM fallback fields (same as the zero-shot evaluation)
                 "needs_llm_eval": parsed.needs_llm_eval,
                 "raw_response": response,
             }
-            if os.environ.get("SKIP_SCORE") == "1":   # 10/18: judge outage; rows are rescored offline
+            if os.environ.get("SKIP_SCORE") == "1":   # scoring skipped; rows are rescored offline
                 acc, scs, scs_res = 0.0, 0.0, None
             else:
                 acc = await calculate_acc_with_fallback(rd)
@@ -330,8 +330,8 @@ async def evaluate_bclass(evaluator: SFTEvaluator, data_path: str, output_path: 
     for video in tqdm(video_list, desc="B-class"):
         video_id = video.get("video_id", "")
         folder_id = video.get("folder_id", "")
-        # 10/13: folder path first (12 BAAI file names repeat across folders; the stem lookup picked the wrong video
-        # for 2 test / 5 train B videos)
+        # folder path first: some BAAI file names repeat across folders, so a lookup by file stem alone can pick the
+        # wrong video
         _fp = f"{BAAI_ROOT}/{folder_id}/{video_id}.mp4"
         key = video_id if video_id in evaluator._baai_lookup else folder_id
         video_path = _fp if os.path.exists(_fp) else evaluator._baai_lookup.get(key)
@@ -359,11 +359,11 @@ async def evaluate_bclass(evaluator: SFTEvaluator, data_path: str, output_path: 
                 "annotated_solution": qa.get("annotated_solution", []),
                 "question": qa["question"],
                 "question_type": qa["question_type"],
-                # LLM fallback fields (same as experiment_right baseline)
+                # LLM fallback fields (same as the zero-shot evaluation)
                 "needs_llm_eval": parsed.needs_llm_eval,
                 "raw_response": response,
             }
-            if os.environ.get("SKIP_SCORE") == "1":   # 10/18: judge outage; rows are rescored offline
+            if os.environ.get("SKIP_SCORE") == "1":   # scoring skipped; rows are rescored offline
                 acc, scs, scs_res = 0.0, 0.0, None
             else:
                 acc = await calculate_acc_with_fallback(rd)
@@ -396,7 +396,7 @@ SCS_DIMS = ("S_obs", "S_formula", "S_derive", "S_conclude")
 
 
 def _scs_dims(scs_res, scs):
-    """10/19: keep the four SCS judge dimensions per QA (same shape as the table-4 zero-shot scs_details);
+    """keep the four SCS judge dimensions per QA (same shape as scs_details of the zero-shot evaluation);
     None when the judge returned no details (e.g. no reasoning chain and no LLM fallback)."""
     d = scs_res.get("details") if isinstance(scs_res, dict) else None
     if not isinstance(d, dict) or not all(k in d for k in SCS_DIMS):

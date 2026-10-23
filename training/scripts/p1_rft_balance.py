@@ -1,4 +1,6 @@
-"""10/16 Phase1 RFT balanced: subsample B-class to match A count (base self-sampling had many more B successes)."""
+"""Class balance of a Stage-I trajectory set: subsample the larger class (in practice B, which has many more
+self-sampling successes) to the size of the other class.
+Usage: python scripts/p1_rft_balance.py --input data/p1/rft_k3.json --output data/p1/rft_k3_bal.json [--seed S]"""
 import argparse, json, random, sys
 
 def main():

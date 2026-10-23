@@ -1,13 +1,13 @@
-"""10/16 Phase1 RFT data: base-4B self-samples on f10 train (results/p1_ss_r{0..3}, eval_n1 native tools, T=0.7)
-filtered by the GT verifier. Same idea as n1_assemble.anchor_samples: system / user rebuilt exactly as eval_n1 builds
+"""Stage-I trajectory data: self-samples on the train QAs (results/<tag>_r{0..7}, eval_n1_sample native tools, T=0.7)
+filtered by the GT verifier. System / user turns are rebuilt exactly as eval_n1 builds
 them (SYSTEM_PROMPT, video fps 1 + build_user_prompt), assistant / tool turns appended as generated (the chat template
 re-renders <think> from the '</think>' in the content).
 Keep: ACC >= .9, no Serper failure, final turn has <answer>, at least one tool call; per QA up to --per_qa
 trajectories, highest SCS first, SCS >= --min_scs.
 Output: data/p1/<name>.json + <name>_report.json; also prints per-QA pass@k stats (A/B).
-10/17: --tags p1_ss,p1_ss2 pools base samples with samples of the round-1 RFT model (expert iteration round 2).
-10/17: reps r0..r7 (A refill sampling p1_ssA uses 8); --only FILE (json list of questions) restricts the QAs.
-Usage (from the work dir $TRIPHYS_WORK, training/README.md): python scripts/p1_rft_build.py --name rft_k2 --per_qa 2 --min_scs .7 [--tags p1_ss,p1_ss2] [--only data/p1/a_uncovered.json]"""
+--tags p1_ss,p1_ss2 pools base-model samples (p1_ss) with samples of the round-2 sampler (p1_ss2); default p1_ss.
+Missing reps are skipped; --only FILE (json list of questions) restricts the QAs.
+Usage (from the work dir $TRIPHYS_WORK): python scripts/p1_rft_build.py --name rft_k2 --per_qa 2 --min_scs .7 [--tags p1_ss,p1_ss2] [--only data/p1/a_uncovered.json]"""
 from srvpaths import BAAI_ROOT, E, EGOEXO_ROOT, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, glob, json, os, sys
 from collections import Counter, defaultdict

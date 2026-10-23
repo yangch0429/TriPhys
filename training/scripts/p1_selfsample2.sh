@@ -1,7 +1,7 @@
 #!/bin/bash
-# 10/16 RFT round-2 / DPO sampling: rft_k3bal_1e4 (Phase1 RFT model, LoRA) on f10 train (300 QAs), native tools
-# (eval_n1 framework), T=0.7, k=4 repeats x 16 shards, 2 slots per GPU on GPU0-7 -> results/p1_ss2_r{0..3}.
-# Each shard capped at 4 h (round-1 shard r0 s11 hung in a code loop for 5 h).
+# Stage-I round-2 self-sampling: rft_k3bal_1e4 (LoRA SFT on the balanced round-1 samples) on the train split (300 QAs),
+# native tools (eval_n1_sample), T=0.7, k=4 repeats x 16 shards, 2 slots per GPU on GPU0-7 -> results/p1_ss2_r{0..3}.
+# Each shard is capped at 4 h (a shard can hang in a long tool-call loop).
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}
 M=${M:-outputs/phase1/rft_k3bal_1e4/final_model}

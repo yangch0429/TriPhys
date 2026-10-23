@@ -1,28 +1,30 @@
 #!/usr/bin/env python3
-"""p2 (10/18, Phase2 prefix-branch DPO; user: speed up the DPO stage): train_dpo_n2.py with the same loss / data /
-optimizer; only the input pipeline is faster:
+"""DPO (Stage II) on top of the Stage-I model (base + Stage-I LoRA), video + multi-turn tool trajectories in the Qwen3.5
+native tool format (VideoSFTDataset of train_sft_n1.py: chat template with tools=, frame subsampling, label mask).
+  policy    = (base merged with the Stage-I LoRA) + new LoRA
+  reference = the same model with the new LoRA disabled (= the Stage-I model)
+  sequence log-prob = sum over assistant tokens (all rounds; tool/system/user masked; logits only at label
+                      positions, chunked log-softmax)
+  loss = -log sigmoid(beta * ((pi_c - ref_c) - (pi_r - ref_r)))  [+ sft_alpha * NLL(chosen) / n_tokens]
+--length_norm: per-token log-ratios, beta_eff = beta x mean pair length ('tokens' of the pair file).
+--class_balance: loss weights so that the A and B pairs have equal total weight.
+--save_half: also save an adapter at half of each epoch.
+--mask_common_prefix: chosen and rejected share a message prefix; labels before the first differing token are masked in
+both, so only the decision after the shared prefix is scored (for whole-trajectory pairs the masked tokens are
+identical in both and cancel in the DPO margin anyway).
+Reference log-probs are computed once (first epoch) and cached. No DDP wrapper: LoRA gradients are
+all-reduced by hand after each accumulation window (two policy forwards per pair before backward).
+Input pipeline:
   - decoded videos (qwen_vl_utils.process_vision_info) are cached per video (LRU 32 per rank): chosen and rejected of
     a pair, and the pairs of one QA, share the video, so each is decoded once instead of 2-4x per epoch
   - one background thread prepares (_process_sample) the next --prefetch pairs while the GPU runs the current one;
     all tokenizer / processor calls stay in that single thread (fast tokenizers are not thread-safe)
-Original docstring:
-n2 (10/14): train_dpo_v24 with the VideoSFTDataset of train_sft_n1.py (Qwen3.5 native tools= rendering, as the n1 SFT
-and eval_n1); nothing else changed. Original docstring:
-DPO v24 (train_dpo_v9 + --length_norm / --class_balance / --save_half, make_train_v24.py) on top of E17 (Qwen3.5-4B + E17 LoRA), video + multi-turn tool trajectories (run with torchrun, GPUs 0-3).
-  policy    = (base merged with the E17 LoRA) + new LoRA
-  reference = the same model with the new LoRA disabled (= E17)
-  sequence log-prob = sum over assistant tokens (all rounds; tool/system/user masked; logits only at label
-                      positions, chunked log-softmax) using the SFT
-                      preprocessing (train_sft_video_fixed: chat template, frame subsampling, label mask)
-  loss = -log sigmoid(beta * ((pi_c - ref_c) - (pi_r - ref_r)))  [+ sft_alpha * NLL(chosen) / n_tokens]
---mask_common_prefix (DPO v5 localized pairs): chosen and rejected share a message prefix; labels before the first
-differing token are masked in both, so only the decision after the shared prefix is scored (for whole-trajectory pairs
-the masked tokens are identical in both and cancel in the DPO margin anyway).
-Reference log-probs are computed once (first epoch) and cached. No DDP wrapper: LoRA gradients are
-all-reduced by hand after each accumulation window (two policy forwards per pair before backward).
-The merged E17 model (+ processor) is saved to --merged_dir for evaluation (eval_sft_v9.py --base_model).
-Usage:
-  torchrun --nproc_per_node=4 train_dpo_v9.py --sft_ckpt CKPT --data data/v9/dpo_pairs_v9.json --output OUT
+The merged Stage-I model (+ processor) is saved to --merged_dir; it is the --base_model of the DPO adapter in eval_n1.py.
+Usage (from the work dir $TRIPHYS_WORK; see training/run_4b.sh):
+  torchrun --nproc_per_node=8 scripts/train_dpo_p2.py --sft_ckpt outputs/phase1/comb1_1e4/final_model
+      --merged_dir outputs/phase1/comb1_1e4/merged --data data/p2/dpo_p2_full1.json --output outputs/phase2/p2_full1
+      --max_length 16384 --epochs 2 --lr 5e-6 --beta 0.1 --sft_alpha 0 --grad_accum 2 --mask_common_prefix
+      --length_norm --class_balance
 """
 from srvpaths import BASE_MODEL, E, N1, SCRIPTS  # machine paths, see srvpaths.py
 import os, sys, json, math, time, argparse, logging, random
@@ -36,7 +38,7 @@ os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
 sys.path.insert(0, SCRIPTS)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, N1)
-from train_sft_n1 import VideoSFTDataset  # noqa: E402  (n2: native tools= rendering, as in n1 SFT)
+from train_sft_n1 import VideoSFTDataset  # noqa: E402  (native tools= rendering, as in the SFT)
 
 import collections
 from concurrent.futures import ThreadPoolExecutor
@@ -136,9 +138,9 @@ def main():
     if rank == 0 and not os.path.exists(os.path.join(args.merged_dir, 'config.json')):
         model.save_pretrained(args.merged_dir)
         processor.save_pretrained(args.merged_dir)
-        logger.info('merged E17 saved to %s' % args.merged_dir)
+        logger.info('merged SFT model saved to %s' % args.merged_dir)
     dist.barrier()
-    if args.seed != 42:   # 10/7 seed replicates: also vary LoRA init (seed 42 keeps the old unseeded init)
+    if args.seed != 42:   # a non-default seed also seeds the LoRA init (seed 42 leaves the init unseeded)
         torch.manual_seed(args.seed)
     model = get_peft_model(model, LoraConfig(
         r=args.lora_r, lora_alpha=args.lora_r * 2, lora_dropout=0.05, bias='none', task_type='CAUSAL_LM',
@@ -192,7 +194,7 @@ def main():
                         futs[j] = pool.submit(prep, j)
                 p = pairs[idx]
                 ec, er = futs.pop(idx).result()
-                if ec is None or er is None:      # filtered in build_dpo_pairs_v9; kept as a guard
+                if ec is None or er is None:      # pairs that do not fit --max_length are skipped
                     logger.warning('pair %d does not fit, skipped' % idx)
                     continue
                 if args.mask_common_prefix:

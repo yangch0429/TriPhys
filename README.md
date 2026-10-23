@@ -127,7 +127,7 @@ GPT-5.5, from a different model family, re-scored all 2,460 question–model pai
   <img src="docs/static/images/training.jpg" alt="TriPhys training" width="92%">
 </p>
 
-- **Stage I: full-trajectory SFT.** The backbone samples tool-integrated trajectories on the 300 training questions without seeing the reference. Trajectories that pass answer verification (ACC ≥ 0.9, an answer in the last turn, at least one tool call, no failed retrieval) are kept. Their final answer block is rewritten into a stepwise chain built only from values already in the trajectory. Tool returns are masked from the loss.
+- **Stage I: full-trajectory SFT.** The backbone samples tool-integrated trajectories on the 300 training questions without seeing the reference. Trajectories that pass answer verification (ACC ≥ 0.9, an answer in the last turn, at least one tool call, no failed retrieval) are kept; questions that no sample solves are filled with tool-using teacher trajectories that never see the reference. Their final answer block is rewritten into a stepwise chain built only from values already in the trajectory. Tool returns are masked from the loss.
 - **Stage II: full-trajectory DPO.** The SFT policy produces on-policy rollouts, which are paired into chosen and rejected trajectories; the shared prefix is masked. A new LoRA adapter is trained on the merged SFT model, with the SFT model as the frozen reference.
 
 
@@ -135,14 +135,16 @@ GPT-5.5, from a different model family, re-scored all 2,460 question–model pai
 
 ```
 TriPhys/
-├── data/                      # the benchmark: MPR / KPR, all + train + test splits, video lists
-├── triphys/                   # shared library: prompts, tools (web_search / code_executor), parser, ACC / SCS metrics
-├── evaluation/                # zero-shot evaluation (Qwen, InteractiveOmni, GPT-5.5 / Gemini), scoring, aggregation
-├── training/                  # TriPhys Stage I (SFT) and Stage II (DPO): data construction, training, evaluation
-├── construction/              # benchmark construction: video selection, event graphs, question generation, review
-├── construction_integrated/   # construction with the question-repair standards built into generation
-├── repair/                    # question-repair scripts that produced the released version (provenance)
-└── docs/                      # project page (GitHub Pages)
+├── data/            # the benchmark: MPR / KPR, all + train + test splits, video lists, physics event library
+├── triphys/         # shared library: prompts, tools (web_search / code_executor), parser, ACC / SCS metrics
+├── evaluation/      # zero-shot evaluation (Qwen, InteractiveOmni, GPT-5.5 / Gemini), scoring, aggregation
+├── training/        # TriPhys Stage I (SFT) and Stage II (DPO): data construction, training, evaluation
+│   ├── evallib/         # evaluation library used by training-time sampling and evaluation (ACC / SCS)
+│   ├── n1/              # tool-loop evaluation and sampling of trained models, LoRA SFT
+│   ├── scripts/         # Stage I data (p1_*), Stage II rollouts, pairs and DPO (p2_*), pipeline scripts
+│   ├── teacher_pilot/   # tool-using Gemini teacher that never sees the reference answer
+│   └── run_4b.sh        # the full Qwen3.5-4B pipeline, step by step
+└── docs/            # project page (GitHub Pages)
 ```
 
 ## 🚀 Quick start
@@ -161,8 +163,8 @@ cp .env.example .env    # fill in video roots and API keys, then: set -a; source
 
 The videos are not redistributed. The lists of required recordings are in [`data/videos_mpr.txt`](data/videos_mpr.txt) and [`data/videos_kpr.txt`](data/videos_kpr.txt).
 
-- **MPR (EgoExo4D).** Accept the [EgoExo4D license](https://ego-exo4d-data.org/) and download the listed takes. Use the frame-aligned video of each take's official `best_exo` camera, stored as `$EGOEXO_ROOT/<take_uid>/best_exo.mp4`. [`construction/select_videos/pack_egoexo_server.py`](construction/select_videos/pack_egoexo_server.py) builds this layout from a raw download.
-- **KPR (Physics-aware-videos).** Download the listed files from [BAAI-DataCube/Physics-aware-videos](https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos) into `$BAAI_ROOT/<folder_id>/<video_id>.mp4`. [`construction/select_videos/download_baai200.py`](construction/select_videos/download_baai200.py) automates the download.
+- **MPR (EgoExo4D).** Accept the [EgoExo4D license](https://ego-exo4d-data.org/) and download the listed takes. Use the frame-aligned video of each take's official `best_exo` camera, stored as `$EGOEXO_ROOT/<take_uid>/best_exo.mp4`.
+- **KPR (Physics-aware-videos).** Download the listed files from [BAAI-DataCube/Physics-aware-videos](https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos) into `$BAAI_ROOT/<folder_id>/<video_id>.mp4`.
 
 ### 3. Evaluate a model
 
@@ -185,18 +187,33 @@ Every model gets the same system prompt and solves each question in a native too
 
 ```bash
 export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh
-bash training/run_4b.sh        # Stage I (sampling → verification → answer-block rewriting → SFT) and Stage II (rollouts → pairs → DPO)
+bash training/run_4b.sh        # Stage I and Stage II for Qwen3.5-4B (8 × 80 GB GPUs); runs in $TRIPHYS_WORK
 ```
 
-See [`training/README.md`](training/README.md) for each step, its inputs and outputs, and the 9B / 27B settings.
+`setup_work.sh` creates the work directory (`scripts` → `training/scripts`, `fc/training` → `training`, the released split under `data/f10/`). Base models default to the Hugging Face ids (`BASE_MODEL=Qwen/Qwen3.5-4B`, `B9=Qwen/Qwen3.5-9B`, `B27=Qwen/Qwen3.6-27B`); a local directory can be set instead. "A" / "B" in the code mean MPR / KPR.
 
-### 5. Build questions on new videos
+**Stage I: full-trajectory SFT.**
 
-See [`construction/README.md`](construction/README.md) for the original pipeline (Stage 1 to Stage 5). See [`construction_integrated/README.md`](construction_integrated/README.md) for the variant that verifies and repairs questions during generation.
+1. `p1_selfsample.sh`: the backbone samples the 300 training questions in the tool loop (T 0.7, 4 samples per question, `n1/eval_n1_sample.py`).
+2. `p1_rft_build.py`, `p1_rft_balance.py`: answer verification keeps trajectories with ACC ≥ 0.9, an `<answer>` block, at least one tool call and no failed retrieval, balanced over MPR / KPR and answer forms.
+3. `p1_rft_chain.sh`, `p1_selfsample2.sh`: LoRA SFT on the verified set (`n1/train_sft_n1.py`: r 32, 3 epochs, lr 1e-4), then a second round of sampling with the resulting model.
+4. `teacher_pilot/teacher_full.py`, `p1_gemini_conv.py`: tool-using Gemini trajectories for questions that no sample solved; the teacher never sees the reference answer.
+5. `p1_rewrite.py`: the final `<answer>` block is rewritten into a stepwise chain that uses only values already in the trajectory; a rewrite is kept only if its SCS is ≥ max(0.75, the original SCS).
+6. `p1_commit.py`, `p1_commit_build.py`: for trajectories that stall without an answer, the model continues from the first two tool rounds; continuations are kept only if they pass verification.
+7. The verified, rewritten trajectories form the Stage I set; LoRA SFT on it gives the Stage I model. Tool returns are masked from the loss.
+
+**Stage II: full-trajectory DPO.**
+
+8. `p2_worker.sh` / `p2_online.py`: on-policy rollouts of the Stage I model on the training questions (T 0.7).
+9. `p2_pairs_full.py`: at most two pairs per question. Chosen: a correct rollout of the Stage I model (ACC ≥ 0.9, SCS ≥ 0.75), otherwise a Stage I trajectory of the same question. Rejected: a wrong (ACC < 0.5) or unanswered rollout.
+10. `train_dpo_p2.py`: the Stage I model is merged and serves as both the initialization of a new LoRA adapter and the frozen reference; length-normalized DPO from the first token where chosen and rejected differ (β 0.1, lr 5e-6, 2 epochs).
+11. `p2_reeval_n1.sh`: evaluation on the 110 test questions with `n1/eval_n1.py` (sharded over GPUs, then merged).
+
+Qwen3.5-9B and Qwen3.6-27B are trained on the same Stage I trajectories and DPO pairs with `scripts/p9_chain.sh` and `scripts/p27_chain.sh`. Training data are model samples scored by API judges and web search results change over time, so a rerun produces data of the same kind rather than identical rows.
 
 ## 🗂️ Data format
 
-`data/mpr_{all,train,test}.json` and `data/kpr_{train,test}.json` are lists of videos, each with its `qa_pairs`. `data/kpr_all.json` stores the flat question list under `qa_pairs`.
+`data/mpr_{all,train,test}.json` and `data/kpr_{train,test}.json` are lists of videos, each with its `qa_pairs`. `data/kpr_all.json` stores the flat question list under `qa_pairs`. `data/_shared_physics_library.json` is the physics event library used to build the event graphs: 29 event categories, each with its visual triggers, latent properties, rules and relevant formulas.
 
 ```jsonc
 {
@@ -228,7 +245,7 @@ See [`construction/README.md`](construction/README.md) for the original pipeline
 
 ## 🙏 Acknowledgements
 
-TriPhysBench builds on [EgoExo4D](https://ego-exo4d-data.org/) and [BAAI-DataCube Physics-aware-videos](https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos), and adapts the event-graph question generation of [OmniGAIA](https://arxiv.org/abs/2602.22897). We thank their authors.
+TriPhysBench builds on [EgoExo4D](https://ego-exo4d-data.org/) and [BAAI-DataCube Physics-aware-videos](https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos). We thank their authors.
 
 ## ⚖️ License
 

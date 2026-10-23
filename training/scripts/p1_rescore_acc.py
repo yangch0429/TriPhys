@@ -1,5 +1,5 @@
-"""10/16 Re-score ACC of a merged eval (results/u_p1_<name>/merged.json) with experiment_right metrics_final (now with
-429/5xx retry): gpt-4o-mini returned 429 during the RFT evals, so some Step1 extractions fell back to ACC 0.
+"""Re-score ACC of a merged eval (results/u_p1_<name>/merged.json) with metrics_final (judge requests retried on
+429/5xx): when the gpt-4o-mini judge is rate-limited during evaluation, Step1 extractions fail and fall back to ACC 0.
 SCS (DeepSeek Flash) is kept. Writes merged_rescored.json next to the input and prints old/new ACC per class.
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p1_rescore_acc.py NAME [NAME ...]"""
 from srvpaths import E, EVAL_LIB  # machine paths, see srvpaths.py

@@ -1,4 +1,4 @@
-"""10/17 commit continuations (p1_commit.py, results/p1_commit/shard_*.json) -> SFT samples in the p1_rft_build layout.
+"""Commit continuations (p1_commit.py, results/p1_commit/shard_*.json) -> SFT samples in the p1_rft_build layout.
 Keep ACC >= .9, answered, no leak; up to --per_qa per QA, highest SCS first. turns are stored without the note.
 Run p1_rewrite.py (Flash-gated) on the output afterwards.
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p1_commit_build.py --name commit_k2 [--per_qa 2]"""

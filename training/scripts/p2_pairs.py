@@ -1,17 +1,19 @@
-"""10/18 Phase2 step 2: preference pairs from the p2_branch.py continuations (shared comb1 prefix, K continuations).
+"""Stage-II preference pairs from the p2_branch.py continuations (shared comb1 prefix, K continuations). Its rescoring
+helper is also used by p2_pairs_full.py, which builds the pairs used for DPO.
   chosen    answered, ACC >= .9, a reference value of the QA appears in its code / answer (used_ref), Flash SCS >= .75
   rejected  wrong answer (ACC < .5) or no <answer> within the remaining rounds (label kept in 'rej')
   neither may contain a Serper failure; ACC/SCS = None (judge timed out during sampling) are rescored here first.
   A pair needs both from the SAME prefix; per QA <= 2 pairs, taken from different prefixes first; the best-SCS
-  chosen and, alternately, a wrong / no-answer rejected. A/B balance = --class_balance loss weights in train_dpo_n2.
+  chosen and, alternately, a wrong / no-answer rejected. A/B balance = --class_balance loss weights in train_dpo_p2.
 Message lists = [system, user(video)] + prefix + continuation, so chosen and rejected share the prefix and
-train_dpo_n2 --mask_common_prefix scores only the model tokens after the branch point.
+train_dpo_p2 --mask_common_prefix scores only the model tokens after the branch point.
 'tokens' = assistant tokens of the continuation (sets beta_eff for --length_norm).
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p2_pairs.py --inp 'results/p2_br/*.json' --out data/p2/dpo_p2.json"""
-from srvpaths import BASE_MODEL, SCRIPTS  # machine paths, see srvpaths.py
+from srvpaths import BASE_MODEL, SCRIPTS, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, asyncio, glob, json, os, sys
 from collections import Counter, defaultdict
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, EVAL_LIB)
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from response_parser import parse_response
 from metrics_final import calculate_acc_with_fallback, calculate_scs_with_fallback

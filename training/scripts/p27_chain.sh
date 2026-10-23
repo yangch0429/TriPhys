@@ -1,11 +1,11 @@
 #!/bin/bash
-# 10/20 user: "先跑27B的SFT和DPO". Same data / hparams as 4B (p9_chain recipe), base Qwen3.6-27B (dense, 52 GB bf16).
+# Qwen3.6-27B (dense, 52 GB bf16): Stage I + Stage II with the 4B data and hyperparameters (as p9_chain.sh).
 #  1. SFT: data/p1/rwf_comb1.json (209), LoRA r32, 3 ep, lr 1e-4, effective batch 16 (= 4B comb1_1e4).
-#     10/20 00:52: DDP (full 27B replica per GPU) OOMs at 16k -> train_sft_n1_mp.py: one process, model split over
-#     GPUs 0-3 (device_map auto), accum 16. Retries resume from the last checkpoint.
+#     A full 27B replica per GPU (DDP) runs out of memory at 16k tokens, so train_sft_n1_mp.py runs one process with
+#     the model split over GPUs 0-3 (device_map auto), accum 16. Retries resume from the last checkpoint.
 #  2. DPO: data/p2/dpo_p2_full1.json (143 4B pairs), same flags as p2_full1; train_dpo_p2_mp.py: 2 ranks x 4 GPUs
 #     (one split replica per rank), accum 8 (ranks x accum = 16 as the 4B / 9B runs).
-#  3. eval_n1 f10 test, 8 shards, one 27B process per GPU (SFT shard then DPO shard), run_det merge.
+#  3. eval_n1 on the test split, 8 shards, one 27B process per GPU (SFT shard then DPO shard), run_det merge.
 # Outputs under $D; outputs/phase{1,2}/*_27b are symlinks.
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Creates the work directory the training scripts run in (training server: experiment_paper/) and puts the
+# Creates the work directory the training scripts run in and puts the
 # released split there under the names the scripts read (data/f10/{aclass,bclass}_qa_{train,test}.json).
 #   E=${TRIPHYS_WORK:-<repo>/work}
 #   $E/scripts      -> training/scripts        (python scripts/..., bash scripts/...)

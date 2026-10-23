@@ -1,8 +1,8 @@
-"""n1 (10/14 SFT/DPO redesign): Qwen3.5 native tool format shared by data build, training and eval.
+"""Qwen3.5 native tool format shared by data building, training and evaluation.
 Tools are passed to the chat template (`tools=TOOLS`), which writes the tool schema into the system turn; calls are XML
   <tool_call>\n<function=web_search>\n<parameter=query>\n...\n</parameter>\n</function>\n</tool_call>
-and tool results are role "tool" messages (rendered as <tool_response> in a user turn). Result payload unchanged from
-eval_sft_v9: json.dumps({"result": ...})."""
+and tool results are role "tool" messages (rendered as <tool_response> in a user turn). Result payload:
+json.dumps({"result": ...})."""
 import json, re
 
 TOOLS = [

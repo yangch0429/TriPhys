@@ -1,5 +1,5 @@
 #!/bin/bash
-# 10/16 base self-sampling on f10 train (300 QAs): untrained base, native tools (eval_n1 = eval_sft_v9 framework),
+# Stage-I base self-sampling on the train split (300 QAs): untrained base model, native tools (eval_n1_sample),
 # T=0.7, k=4 repeats x 16 shards, 2 slots per GPU on GPU0-7 -> results/p1_ss_r{0..3}
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}

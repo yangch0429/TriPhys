@@ -22,7 +22,7 @@ Final answer: [your answer]
 
 
 def build_user_prompt(question: str, question_type: str) -> str:
-    """构建用户prompt，根据题型添加格式要求"""
+    """构建 user prompt，根据题型添加格式要求"""
     
     prompt = f"""Question: {question}
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Qwen3.5-4B, Stage I (SFT, comb1_1e4) and Stage II (DPO, p2_full1): the server commands in the order they ran.
+# Qwen3.5-4B, Stage I (SFT, comb1_1e4) and Stage II (DPO, p2_full1): all commands, in order.
 # 8 GPUs (80 GB). Run training/setup_work.sh first; env: EGOEXO_ROOT, BAAI_ROOT, SERPER_API_KEYS, OPENROUTER_API_KEY
 # (Gemini rewriter / teacher, gpt-4o-mini ACC judge), DEEPSEEK_API_KEY (SCS judge); optional PY, TR, BASE_MODEL.
 # 9B / 27B reuse the 4B data: scripts/p9_chain.sh, scripts/p27_chain.sh.

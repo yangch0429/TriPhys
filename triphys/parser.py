@@ -1,6 +1,6 @@
-"""响应解析器 - Final版本
+"""响应解析器
 严格规则：只从<answer>标签内提取，无fallback机制
-修复：只提取</think>后的<answer>内容，占位符也触发LLM评测
+只提取</think>后的<answer>内容；无</think>、无<answer>或只有占位符时设置 needs_llm_eval（由 LLM 评测兜底）
 """
 import re
 from dataclasses import dataclass

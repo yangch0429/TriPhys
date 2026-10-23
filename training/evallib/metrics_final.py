@@ -22,8 +22,8 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-# judge POSTs are retried with backoff on 429 / 5xx. Scoring unchanged.
-# Patched on httpx.AsyncClient so llm_two_step_eval (same process) is covered too.
+# judge POSTs are retried with backoff on 429 / 5xx (the retry does not affect the scores).
+# The retry is installed on httpx.AsyncClient so that llm_two_step_eval (same process) uses it too.
 _orig_async_post = httpx.AsyncClient.post
 async def _post_retry(self, url, *a, **kw):
     for _i in range(8):
@@ -105,7 +105,7 @@ async def calculate_acc_async(results: List[Dict]) -> float:
 
 
 def calculate_acc(results: List[Dict]) -> float:
-    """同步wrapper，兼容旧代码"""
+    """同步wrapper：calculate_acc_async 的同步版本"""
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(calculate_acc_async(results))
 
@@ -461,8 +461,7 @@ async def _llm_judge_reasoning(reasoning: str, gt_solution: str) -> Dict[str, fl
 
 def calculate_tua(results: List[Dict]) -> float:
     """
-    计算工具调用准确性（TUA†）- 当前版本不使用
-    保留接口以兼容旧代码
+    计算工具调用准确性（TUA†）- 不参与评分，恒返回 0.0
     """
     return 0.0
 

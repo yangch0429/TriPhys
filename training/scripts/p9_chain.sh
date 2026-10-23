@@ -1,10 +1,10 @@
 #!/bin/bash
-# 10/19 user: "按 SFT 和 DPO 都复用 4B 数据 先跑 9B". Same data / hparams as 4B, base Qwen3.5-9B.
+# Qwen3.5-9B: Stage I + Stage II with the 4B data and hyperparameters.
 #  1. SFT: data/p1/rwf_comb1.json (209 = comb1_1e4 data), train_sft_n1 LoRA r32, 3 ep, lr 1e-4, 8 GPUs x accum 2
 #     (effective batch 16 = 4B's 4 GPUs x accum 4)
 #  2. DPO: data/p2/dpo_p2_full1.json (143 4B pairs), train_dpo_p2 init + frozen ref = 9B SFT (merged), same flags as p2_full1
-#  3. eval_n1 f10 test for both (8 shards each, 2 processes per GPU), run_det merge. ACC rescore is done locally
-#     (OpenRouter openai/gpt-4o-mini; judge endpoint down on the server).
+#  3. eval_n1 on the test split for both (8 shards each, 2 processes per GPU), run_det merge. ACC re-scoring with the
+#     gpt-4o-mini judge (p1_rescore_acc.py) is run separately.
 # Large outputs under $D; outputs/phase{1,2}/*_9b are symlinks.
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}

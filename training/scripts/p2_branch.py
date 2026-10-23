@@ -1,6 +1,7 @@
-"""10/18 Phase2 DPO data (user-approved method = Fig.6 stage 2 with small changes): branch continuations from the SFT
-policy's own trajectory.
-  source   on-policy rollouts of comb1_1e4 on f10 TRAIN (results/p2_ss_r*, eval_n1 framework, T=0.7)
+"""Stage-II DPO data: branch continuations from the Stage-I policy's own trajectory. The functions here are used by
+p2_online.py; run standalone, this script branches saved rollouts.
+  source   on-policy rollouts of the Stage-I model (comb1_1e4) on the train QAs (standalone: results/<tag>_r*, --tags;
+           eval_n1 loop, T=0.7)
   branch   first assistant turn AFTER the first web_search result that uses acquired values: its first code_executor
            call, or the answer turn when no code is called. Prefix = every turn before it (observations, queries,
            returned results); the branch turn's own think (value choice) belongs to the continuation.
@@ -13,11 +14,12 @@ policy's own trajectory.
 Output: --out json list of {question, cls, j (prefix id), s, prefix, cont, ACC, SCS, answered, used_ref, ...}
 Usage (from the work dir $TRIPHYS_WORK): GEN_TEMP=0.7 python scripts/p2_branch.py --model M --shard i --n_shards n --out results/p2_br/shard_i.json
                 [--limit N] [--tags p2_ss]"""
-from srvpaths import N1, SCRIPTS  # machine paths, see srvpaths.py
+from srvpaths import N1, SCRIPTS, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, asyncio, json, os, re, sys
 from collections import defaultdict
 sys.path.insert(0, N1)
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, EVAL_LIB)
 import types
 _src = open(N1 + '/eval_n1_sample.py').read().rsplit('asyncio.run(main())', 1)[0]
 S = types.ModuleType('eval_n1_sample')
@@ -44,7 +46,7 @@ def nums(s):
     return [x for x in out if abs(x) not in TRIV]
 
 
-def expand(xs):   # same unit factors as evaluation/scripts/n1_error_types.py
+def expand(xs):   # reference numbers under common unit conversion factors
     out = set()
     for y in xs:
         out.add(y)
@@ -168,7 +170,7 @@ async def main():
                   'question': q, 'question_type': qa['question_type'], 'needs_llm_eval': p.needs_llm_eval,
                   'raw_response': content}
             answered = bool(re.search(r'<answer>.*?</answer>', content, re.DOTALL))
-            acc, scs = 0.0, 0.0   # None = judge timed out (10/18 judge outage); p2_pairs.py rescores those rows
+            acc, scs = 0.0, 0.0   # set to None if a judge call times out; p2_pairs.py rescores those rows
             try:
                 if p.prediction:
                     acc = float(await asyncio.wait_for(calculate_acc_with_fallback(rd), JUDGE_S))

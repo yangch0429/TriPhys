@@ -1,15 +1,15 @@
-"""10/17 Phase1 SCS fix: rewrite only the final <answer> block of RFT trajectories into a full Step-by-step reasoning
-chain. Think text, tool calls and tool results stay exactly as the model generated them; the final answer string stays
-the model's own (ACC >= .9 already). Why: 22% of A samples in rft_k3_bal end with a bare '<answer>1.28 m</answer>'
-(SCS 0), and even correct eval answers get S_obs ~.56 because the chain does not name the observed/retrieved quantities.
+"""Stage-I answer-block rewrite: rewrite only the final <answer> block of self-sampled trajectories into a full
+Step-by-step reasoning chain. Think text, tool calls and tool results stay exactly as the model generated them; the
+final answer string stays the model's own (ACC >= .9 already). Purpose: many correct samples end with a bare
+'<answer>1.28 m</answer>' (SCS 0), or with a chain that does not name the observed / retrieved quantities (low S_obs).
 Rewriter (Gemini-3.6-Flash, text only, not the SCS judge) sees the question, the trajectory, the final answer and the
 train-set gold solution (only as a guide to which quantities/formula to name; values must come from the trajectory).
-10/17 (user: annotated-solution variants are accepted by a DeepSeek Flash score, as gpt-4o did before): every rewrite is
-scored by the eval SCS judge (metrics_final.calculate_scs_detailed = deepseek-flash, same parse as eval) against the gold
-annotated solution and kept only if SCS >= max(MIN_SCS, the sample's own SCS); up to 3 tries, else the original sample is
-kept when its own (Flash) SCS >= MIN_SCS, otherwise dropped. --prev OLD_OUT reuses earlier rewrites as the first candidate.
-10/17: env RW_TRIES (default 3) sets the number of tries (A refill uses 6).
-Usage (from the work dir $TRIPHYS_WORK, training/README.md): [RW_TRIES=6] python scripts/p1_rewrite.py IN_NAME OUT_NAME [--prev OLD_OUT]"""
+Every rewrite is scored by the evaluation SCS judge (metrics_final.calculate_scs_detailed = deepseek-flash, same parse as
+evaluation) against the gold annotated solution and kept only if SCS >= max(MIN_SCS, the sample's own SCS); up to
+RW_TRIES tries, else the original sample is kept when its own (Flash) SCS >= MIN_SCS, otherwise dropped.
+--prev PREV_OUT uses the rewrites stored in data/p1/PREV_OUT.json as the first candidate.
+Env RW_TRIES (default 3) sets the number of tries (the MPR refill in p1_afill_data.sh uses 6).
+Usage (from the work dir $TRIPHYS_WORK): [RW_TRIES=6] python scripts/p1_rewrite.py IN_NAME OUT_NAME [--prev PREV_OUT]"""
 from srvpaths import EVAL_LIB, SCRIPTS  # machine paths, see srvpaths.py
 import asyncio, json, logging, os, re, sys
 import httpx
