@@ -1,4 +1,4 @@
-// TriPhysBench project page: leaderboard, comparison table, small interactions.
+// TriPhysBench project page: leaderboard and small interactions.
 (function () {
   const ICON = { gemini: 'icon_gemini.png', openai: 'icon_openai.png', qwen: 'icon_qwen.png', sensenova: 'icon_sensenova.png' };
 
