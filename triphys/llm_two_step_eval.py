@@ -329,7 +329,7 @@ async def llm_evaluate_raw_response_two_step(
     """
     两步评测主函数
     Step 1: LLM提取答案和推理链（不提供GT）
-    Step 2: 调用原有规则评分函数（带单位转换）
+    Step 2: 调用规则评分函数（带单位转换）
     """
 
     # Step 1: 提取（不提供GT）
@@ -351,7 +351,7 @@ async def llm_evaluate_raw_response_two_step(
         pred_text = extracted_answer
         reasoning_text = extracted_reasoning
 
-    # Step 2: 调用原有规则评分函数（带单位转换）
+    # Step 2: 调用规则评分函数（带单位转换）
     try:
         if question_type == 'TYPE_A':
             acc_score = _acc_type_a(pred_text, ground_truth)
@@ -368,7 +368,7 @@ async def llm_evaluate_raw_response_two_step(
         logger.error(f"ACC calculation failed: {e}")
         acc_score = 0.0
 
-    # SCS评分：直接调用原有的LLM评分函数
+    # SCS评分：直接调用 metrics_final 的LLM评分函数
     scs_details = {'S_obs': 0.0, 'S_formula': 0.0, 'S_derive': 0.0, 'S_conclude': 0.0}
     scs_score = 0.0
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# 10/18 one p2_online.py worker on the shared QA queue (results/p2_on/claims); resumes its own claims, retries twice.
+# One p2_online.py worker on the shared QA queue (results/p2_on/claims); resumes its own claims, retries twice.
 # Usage: p2_worker.sh ID GPU
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}

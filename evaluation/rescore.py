@@ -1,7 +1,7 @@
 """Score (or re-score) saved responses: rows without scores, rows with judge errors, or all rows (--all).
 
   python evaluation/rescore.py results/qwen35_4b.jsonl [--all] [--thinking_opened]
-Scoring = triphys.metrics.score_response (server parser + metrics_final, as in training/n1/eval_n1.py)."""
+Scoring = triphys.metrics.score_response (triphys.parser + triphys.metrics_final, as in training/n1/eval_n1.py)."""
 import argparse
 import asyncio
 import json

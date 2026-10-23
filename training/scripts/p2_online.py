@@ -1,5 +1,5 @@
-"""10/18 13:15 Phase2 DPO data, online version of p2_selfsample.sh + p2_branch.py (user: speed up the DPO stage).
-Same method as p2_branch.py (prefix-branch, user-approved); only the sampling schedule changes:
+"""Stage-II rollouts, generated online: sampling and prefix branching (p2_branch.py) in one pass per QA; workers can
+share a QA queue (--claim_dir, see p2_worker.sh). Schedule:
   per train QA, up to --attempts comb1 rollouts (eval_n1 loop, T .7) are generated only UP TO the branch turn
   (= first assistant turn after a web_search result that calls code_executor or answers; p2_branch.branch()).
   A rollout that computes / answers before any search, stops calling tools, or repeats tool results has no prefix
@@ -12,9 +12,10 @@ Same method as p2_branch.py (prefix-branch, user-approved); only the sampling sc
 Output rows = p2_branch rows (+ attempt); per-QA attempt log in OUT_attempts.json. Resumable per QA.
 Usage: GEN_TEMP=0.7 python scripts/p2_online.py --model M --out results/p2_on/w_i.json --claim_dir results/p2_on/claims
        (or --shard i --n_shards n for a fixed split)"""
-from srvpaths import SCRIPTS  # machine paths, see srvpaths.py
+from srvpaths import SCRIPTS, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, asyncio, json, os, re, sys
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, EVAL_LIB)
 import torch
 import p2_branch as P
 S, B = P.S, P.B

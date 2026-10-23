@@ -1,9 +1,9 @@
 #!/bin/bash
 # MPR refill pool data/p1/afill_rwf.json (fallback chosen trajectories of Stage II, read by scripts/p2_pairs_full.py).
-# The commands of scripts/p1_afill.sh + scripts/p1_afill_train.sh up to afill_rwf, in the order they ran:
-#  1) uncovered = MPR train QAs with no sample in the Stage-I data (rwf_comb1; the server run compared against
-#     rwf_comb2 = rwf_comb1 + KPR-only samples, so the MPR set is the same)
-#  2) earlier correct samples of those QAs (p1_ss, p1_ss2) -> afill_old -> answer-block rewrite, 6 tries
+# Steps:
+#  1) uncovered = MPR train QAs with no sample in the Stage-I data (data/p1/rwf_comb1.json)
+#  2) correct self-samples of those QAs from the Stage-I sampling rounds (p1_ss, p1_ss2) -> afill_old -> answer-block
+#     rewrite, 6 tries
 #  3) rftrwf_bal_1e4 samples the uncovered QAs 8 more times (T 0.7, eval_n1_sample), 8 reps x 8 shards on 16 slots
 #  4) ACC re-score of the new samples, afill_new (same filter, <= 3 per QA) -> rewrite 6 tries
 #  5) afill_rwf = old + new, <= 3 per QA by SCS (after rewrite)

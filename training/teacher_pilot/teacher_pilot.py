@@ -1,9 +1,12 @@
-"""10/15 teacher forward-solve pilot (OmniAtlas style): Gemini (OpenAI-compatible endpoint, whole clip as base64 video)
-solves f10 train QAs with REAL tools and never sees the GT. Same SYSTEM_PROMPT / user prompt as eval_sft_v9, same tool
-protocol (<tool_call>{"name": web_search|code_executor, "arguments": ...}</tool_call>, at most 6 rounds); tool results
-come from the eval_sft_v9 Serper search and a python exec with math/numpy. Each round = one API call: the reply is cut
-after the last </tool_call> (the teacher must not invent tool output), the tools run, their results go back as a
-<tool_response> user message. Scoring = eval_sft_v9 (metrics_final ACC gpt-4o-mini, SCS deepseek-flash).
+"""Gemini teacher forward-solve (OmniAtlas style): shared code of the teacher runs, and a run on a stratified sample.
+Gemini (OpenAI-compatible endpoint, whole clip as base64 video) solves train QAs with REAL tools and never sees the GT.
+Same SYSTEM_PROMPT / user prompt as the evaluation, tool protocol (<tool_call>{"name": web_search|code_executor,
+"arguments": ...}</tool_call>, at most 6 rounds); tool results come from the Serper search of n1/eval_n1.py and a python
+exec with math/numpy. Each round = one API call: the reply is cut after the last </tool_call> (the teacher must not
+invent tool output), the tools run, their results go back as a <tool_response> user message. Scoring = metrics_final
+(ACC gpt-4o-mini, SCS deepseek-flash).
+Run directly, it solves N_PER_CLASS QAs per class (default 10, stratified by type / difficulty, one QA per video) K times
+(default 2); teacher_full.py imports the shared parts and runs all train QAs.
 Output: per trajectory the full turn list (training format), tool log, usage tokens, ACC/SCS.
 Keys: OPENROUTER_API_KEY (Gemini, CHAT_API_BASE / GEMINI_MODEL), SERPER_API_KEYS, DEEPSEEK_API_KEY (SCS judge).
 Usage (from the work dir $TRIPHYS_WORK): python fc/training/teacher_pilot/teacher_pilot.py OUT.json [K] [N_PER_CLASS]"""
@@ -14,14 +17,13 @@ import httpx
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'scripts'))
 from srvpaths import E, EVAL_LIB, N1, EGOEXO_ROOT, BAAI_ROOT  # noqa: E402  machine paths, see srvpaths.py
-# 10/16: experiment_right must come first (scripts/metrics_final is the old all-gpt-4o-mini judge; SCS must be Flash)
+# EVAL_LIB first on sys.path: prompts, response parser, metrics_final (ACC gpt-4o-mini, SCS DeepSeek Flash)
 sys.path.insert(0, EVAL_LIB)
 from prompts import SYSTEM_PROMPT, build_user_prompt
 from response_parser import parse_response
 from metrics_final import calculate_acc_with_fallback, calculate_scs_with_fallback
 
-# eval_sft_v9 parses argv at import time -> take its Serper block (keys + query_web_search) from the source
-# (the block is identical in n1/eval_n1.py, which is the copy shipped here)
+# importing n1/eval_n1.py would run its main(); take only its Serper block (keys + query_web_search) from the source
 _src = open(N1 + '/eval_n1.py').read()
 _ns = {}
 exec('import json, os, time, logging, requests\nlogger = logging.getLogger("serper")\n'

@@ -1,7 +1,7 @@
 #!/bin/bash
-# 10/18 20:05 p2_chain3 evaluated the DPO model with eval_sft_v9 (text tool format) -> 0 tool calls, invalid.
-# Re-evaluate with eval_n1 (native tools, same harness as comb1/phase 1). Waits until both comb3 trainings are done
-# (GPUs 0-7 busy), then 8 shards (1/GPU) next to the comb3 evals; merge + ACC rescore.
+# Stage-II evaluation: the DPO adapter outputs/phase2/NAME/final_model on top of the merged Stage-I model, evaluated
+# with eval_n1 (native tools, same harness as Stage I) on the test split, 8 shards (1 per GPU), then merge.
+# Usage: p2_reeval_n1.sh [NAME]   (default p2_full1)
 E=${TRIPHYS_WORK:-$(dirname "$(dirname "$(dirname "$(readlink -f "$0")")")")/work}; cd $E
 PY=${PY:-python}
 H=$E/fc/training/n1
@@ -11,7 +11,6 @@ MERGED=$E/outputs/phase1/comb1_1e4/merged
 R=results/u_p2n1_$NAME
 L=logs/p2_reeval_$NAME.log
 step() { echo "$(date "+%F %T") $*" >> $L; }
-# 10/18 20:50 user: comb3 not trained for now -> start immediately on GPU0-7
 step "eval_n1 8 shards"
 mkdir -p $R
 for i in $(seq 0 7); do

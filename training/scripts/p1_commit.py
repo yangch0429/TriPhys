@@ -1,17 +1,20 @@
-"""10/17 Phase1 no-answer fix: "commit" continuations. 26/110 test rows of rftrw_bal_1e4 give no answer, 17 of them because
-the model keeps re-searching a value it cannot find until the round limit; the RFT pool has almost no successful
-trajectory that shows "search failed -> commit to an estimate -> answer" (A 7/272).
-Source: stuck self-samples (results/p1_ss*, no <answer>, >= 2 tool rounds) on f10 TRAIN QAs. Prefix = the model's own
+"""Stage-I "commit" continuations: trajectories in which the model, after searches that did not find a value, commits
+to an estimate and answers. A model that cannot find a value tends to keep re-searching until the round limit and gives
+no answer, and the self-sample pool has almost no successful trajectory of the form
+"search failed -> commit to an estimate -> answer".
+Source: stuck self-samples (results/p1_ss*, no <answer>, >= 2 tool rounds) on the train QAs. Prefix = the model's own
 first K rounds (assistant + tool turns, K = 2). The last tool message gets a one-off note asking it to commit to an
-estimate and answer; the model (Phase1 SFT model, T=0.7) writes the next turn(s) (up to 3 rounds; tools run, each tool result carries the note). Kept only if ACC >= .9 (GT verifier),
-the reply has <answer>, and its think does not mention the note. The note is removed from the stored trajectory, so the
-SFT sample is: own failed searches -> own committed answer. Eval is unchanged (no note there).
+estimate and answer; the model (Stage-I SFT model, T=0.7) writes the next turn(s) (up to 3 rounds; tools run, each tool
+result carries the note). Kept only if ACC >= .9 (GT verifier), the reply has <answer>, and its think does not mention
+the note. The note is removed from the stored trajectory, so the SFT sample is: own failed searches -> own committed
+answer. Evaluation never adds the note.
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p1_commit.py --model M --shard i --n_shards n --out results/p1_commit/shard_i.json"""
-from srvpaths import N1, SCRIPTS  # machine paths, see srvpaths.py
+from srvpaths import N1, SCRIPTS, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, asyncio, json, os, re, sys
 from collections import defaultdict
 sys.path.insert(0, N1)
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, EVAL_LIB)
 import types
 # eval_n1_sample.py ends with a bare asyncio.run(main()); load it without that line
 _src = open(N1 + '/eval_n1_sample.py').read().rsplit('asyncio.run(main())', 1)[0]

@@ -1,20 +1,17 @@
-"""n1 SFT (10/14): train_sft_v29.py with the Qwen3.5 native tool format and a loss weight on reasoning tokens.
-Changes vs v29: apply_chat_template(..., tools=n1_tools.TOOLS) (assistant tool calls given as `tool_calls`, rendered as
-native XML by the template); --think_w: loss weight of tokens inside <think>...</think> of assistant turns (1.0 = v29);
---grad_accum. Everything else (LoRA targets, masking, video handling, LabelOnlyTrainer) unchanged.
-"""
-#!/usr/bin/env python3
-"""
-Fixed SFT training for Qwen3.5-4B VL with tool use.
+"""LoRA SFT (Stage I) of the Qwen3.5 / Qwen3.6 vision-language models on multi-turn tool-use trajectories with video,
+in the Qwen3.5 native tool format.
 
-Key fixes over previous version:
-1. enable_thinking=False  → model outputs directly in Step/tool_call/answer format
-2. Proper label masking   → only assistant turns contribute to loss
-3. Real video loading     → visual tokens fed to model
-4. Multi-turn support     → system/user/assistant/tool/assistant format
+1. Chat template      apply_chat_template(..., tools=n1_tools.TOOLS, enable_thinking=True); assistant tool calls are
+                      given as `tool_calls` and rendered as native XML by the template
+2. Label masking      only assistant turns (including <|im_end|>) contribute to the loss
+3. Video loading      frames at 1 fps (as in evaluation), token-budget-aware subsampling for long videos
+4. Multi-turn         system / user / assistant / tool / assistant ... messages
+5. --think_w          loss weight of tokens inside <think>...</think> of assistant turns (default 1.0)
+LoRA on the language-model projections; LabelOnlyTrainer computes the (weighted) loss on labelled positions only.
 
-Usage:
-  python train_sft_video_fixed.py --data DATA_JSON --output OUTPUT_DIR [--max_samples N] [--epochs E]
+Usage (from the work dir $TRIPHYS_WORK; see training/scripts/p1_rft_chain.sh):
+  torchrun --nproc_per_node=4 fc/training/n1/train_sft_n1.py --data data/p1/DATA.json --output OUT_DIR
+      --base_model Qwen/Qwen3.5-4B --epochs 3 --lr 1e-4 --lora_r 32 --max_length 16384 --grad_accum 4
 """
 
 import os, sys, json, re, argparse, logging
@@ -43,7 +40,7 @@ THINK_W = 1.0
 # ── Video path resolver ────────────────────────────────────────────────────────
 
 def resolve_video_path(path_str: str) -> Optional[str]:
-    """Convert training data video paths to real server paths."""
+    """Map the video paths stored in the training data to EGOEXO_ROOT / BAAI_ROOT files."""
     if 'best_exo' in path_str or 'video_best_exo' in path_str:
         uid = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', path_str)
         if uid:
@@ -57,7 +54,7 @@ def resolve_video_path(path_str: str) -> Optional[str]:
 
 def fix_messages_video(messages: List[Dict]) -> List[Dict]:
     """Replace <video>path</video> text with proper video dict for processor.
-    Uses fps=1.0 exactly as experiment_right does.
+    Uses fps=1.0, as in evaluation.
     """
     fixed = []
     for msg in messages:
@@ -220,8 +217,8 @@ class VideoSFTDataset(Dataset):
         has_video = vid_inputs is not None and len(vid_inputs) > 0
 
         if has_video:
-            # Token-budget-aware frame subsampling (reviewer recommendation).
-            # NO fixed MAX_FRAMES cap — consistent with experiment_right evaluation.
+            # Token-budget-aware frame subsampling.
+            # NO fixed MAX_FRAMES cap — consistent with evaluation.
             # Reserve text_budget tokens for prompt + target; visual tokens get the rest.
             # At ~256 tokens/frame: max_visual_frames = (max_length - text_budget) // 256
             TEXT_BUDGET = 6144    # tokens reserved for text (system + user + assistant)
@@ -450,7 +447,7 @@ def main():
     parser.add_argument('--output',      default=E + '/outputs/sft_v2')
     parser.add_argument('--base_model',  default=MODEL_PATH)
     parser.add_argument('--max_samples', type=int, default=None)
-    parser.add_argument('--max_length',  type=int, default=16384,  # reviewer: 16K for long videos
+    parser.add_argument('--max_length',  type=int, default=16384,  # 16K for long videos
                         help='Max token length. Visual tokens ~256/frame; budget-aware subsampling applied.')
     parser.add_argument('--epochs',      type=int, default=5)
     parser.add_argument('--lr',          type=float, default=2e-4)

@@ -1,10 +1,10 @@
-"""Deterministic re-evaluation (10/5) on GPUs 0/1/3 (GPU 2 belongs to another user), experiment_paper/.
-eval_det_v9.py (greedy, cached Serper, JUDGE_TEMP=0) on the fix7 117 test QAs, 3 shards per model, 2 models at a time:
-  wave 1  base (untrained Qwen3.5-4B, same harness) + E17
-  wave 2  DPO v4 + DPO v5-L
-  wave 3  E17 again (determinism check: identical answers expected where the Serper cache is hit)
--> results/det_<name>/merged.json; summary table in logs/run_det.log. The GPU holder is stopped / restarted.
-Usage: setsid nohup python scripts/run_det.py > logs/run_det.log 2>&1 < /dev/null &"""
+"""Merge of sharded evaluation results. merge(NAME) is what the training scripts use:
+  (cd scripts && python -c "import run_det; run_det.merge('NAME')")
+collects results/det_<NAME>/*_{aclass,bclass}_shard*.json (Serper failure files excluded) into
+results/det_<NAME>/merged.json with a summary per class (A, B, overall: n, ACC, SCS, OGS, no_answer, serper_failed,
+ACC by question type, mean SCS components when eval_n1 stored them) and logs one summary line.
+The __main__ block (a batch evaluation of the models listed in MODELS) is not used by the training pipeline; it needs
+an evaluator script and model directories that are not part of this repository."""
 from srvpaths import BASE_MODEL, E  # machine paths, see srvpaths.py
 import os, sys, json, glob, signal, subprocess, time
 from collections import defaultdict
@@ -38,7 +38,7 @@ def stop_holder():
 
 
 def start_holder():
-    log('holder disabled (user 10/8: occupy GPUs only with real tasks)')
+    log('GPU holder disabled (GPUs are occupied only by real tasks)')
     return
     p = subprocess.Popen([PYTHON, ROOT + '/scripts/hold_idle_gpus.py', '0,1,2,3'], stdout=open(ROOT + '/logs/hold_gpus.log', 'a'),
                          stderr=subprocess.STDOUT, cwd=ROOT, start_new_session=True)
@@ -74,7 +74,7 @@ def merge(name):
                    'no_answer': sum(1 for r in items if '<answer>' not in (r.get('response') or '')),
                    'serper_failed': sum(1 for r in items if r.get('serper_failed')),
                    'acc_by_type': {t: round(sum(v) / len(v), 4) for t, v in sorted(bt.items())}}
-        dd = [r['scs_details'] for r in items if r.get('scs_details')]  # 10/19: eval_n1 stores the 4 SCS dims
+        dd = [r['scs_details'] for r in items if r.get('scs_details')]  # eval_n1 stores the 4 SCS dims
         if dd:
             summ[k]['SCS_dims'] = {d: round(sum(x[d] for x in dd) / len(dd), 4)
                                    for d in ('S_obs', 'S_formula', 'S_derive', 'S_conclude')} | {'n_with_details': len(dd)}

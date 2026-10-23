@@ -1,0 +1,954 @@
+{
+  "version": "1.0",
+  "total_entries": 29,
+  "entries": [
+    {
+      "Event_Category": "Mechanics/Collision",
+      "Description": "Two or more objects make contact and exchange momentum and energy through impulsive forces over a short time interval.",
+      "Visual_Triggers": [
+        "objects hitting",
+        "bouncing off",
+        "rebounding",
+        "crashing",
+        "impact",
+        "ricochet"
+      ],
+      "Latent_Properties": [
+        "coefficient_of_restitution (e, dimensionless): ratio of relative speeds after/before collision; cannot be seen directly as it requires velocity measurements before and after impact",
+        "impulse (J, N·s): integral of force over collision time; contact forces during the brief collision are not visible in standard video frames",
+        "collision_time (Δt, s): duration of contact; too short to be resolved temporally in typical video frame rates",
+        "internal_energy_loss (Q, J): energy converted to heat/sound/deformation; thermal and acoustic effects are not visually quantifiable from video alone"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If the video shows two objects colliding and rebounding with visible pre- and post-collision trajectories, trigger: code_executor(formula='e = (v2_f - v1_f) / (v1_i - v2_i)'). Use tracked velocities to compute coefficient of restitution.",
+        "Condition_2": "If the collision involves a common material (e.g., steel, rubber) and the coefficient of restitution is needed but unknown, trigger: web_search(query='typical coefficient of restitution for [material] collision').",
+        "Condition_3": "If the mass of an object is known and its velocity change during collision is measurable, trigger: code_executor(formula='J = m * Δv'). Compute impulse from mass and change in velocity."
+      },
+      "Graph_Injection": "Add coefficient_of_restitution as a leaf node to Object nodes via has_property edge. Add impulse as a leaf node to Interaction nodes via has_quantity edge. Add collision_time as a leaf node to Interaction nodes via has_duration edge.",
+      "Example_Question_Sketch": "A steel ball drops onto a marble floor, rebounds to half its original height; if the ball's mass is 0.2 kg and contact time is 5 ms, calculate the average force during impact using code_executor.",
+      "Relevant_Formulas": [
+        "e = (v2' - v1') / (v1 - v2) where e is coefficient of restitution, v1,v2 are pre-collision velocities, v1',v2' are post-collision velocities",
+        "J = m * Δv = ∫ F dt where J is impulse, m is mass, Δv is velocity change, F is force, t is time",
+        "F_avg = J / Δt where F_avg is average collision force, Δt is collision time",
+        "Q = (1/2)μ(1 - e²)(v1 - v²)² where Q is energy loss, μ is reduced mass, e is coefficient of restitution, v1,v2 are pre-collision velocities"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Sliding_Friction",
+      "Description": "A resistive force that opposes the relative motion between two solid surfaces in contact when sliding against each other.",
+      "Visual_Triggers": [
+        "sliding",
+        "decelerating",
+        "dragging",
+        "scraping",
+        "coming to a stop",
+        "slowing down"
+      ],
+      "Latent_Properties": [
+        "coefficient_of_kinetic_friction (μ_k, dimensionless): cannot be directly observed as it depends on microscopic surface properties and material pairings.",
+        "normal_force (N, N): cannot be directly observed as it requires knowledge of mass distribution and gravitational field orientation relative to the surface.",
+        "kinetic_friction_force (f_k, N): cannot be directly observed as it is the net horizontal resistive force, requiring separation from other forces like air resistance.",
+        "surface_roughness (R_a, μm): cannot be directly observed at video scale as it describes microscopic texture variations."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If the video shows an object sliding to a stop on a horizontal surface, trigger: code_executor(formula='f_k = μ_k * N'). Use known μ_k from web_search or estimate from material.",
+        "Condition_2": "If the video shows an object sliding on an inclined plane, trigger: code_executor(formula='N = m*g*cos(θ)'). Requires θ from geometry and m from web_search or estimation.",
+        "Condition_3": "If the video shows two different materials sliding, trigger: web_search(query='coefficient of kinetic friction [material1] [material2]') to retrieve μ_k."
+      },
+      "Graph_Injection": "Add μ_k as a leaf node to Object nodes via has_property edge. Add N as a leaf node to Object nodes via experiences_force edge. Add f_k as a leaf node to Motion nodes via opposed_by edge. Add R_a as a leaf node to Surface nodes via has_property edge.",
+      "Example_Question_Sketch": "A wooden block slides to a stop on a concrete floor; given the block's mass from a label in the video and the distance slid, calculate the coefficient of kinetic friction using kinematic equations and Newton's second law.",
+      "Relevant_Formulas": [
+        "f_k = μ_k * N (kinetic friction force equals coefficient of kinetic friction times normal force)",
+        "N = m * g * cos(θ) (normal force on an incline, with θ = 0 for horizontal surfaces)",
+        "v_f^2 = v_i^2 - 2 * a * d (kinematic equation for deceleration, with a = f_k / m)",
+        "μ_k = (v_i^2) / (2 * g * d) (derived for horizontal sliding from rest to stop, assuming no other forces)"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Projectile_Motion",
+      "Description": "An object moves under the influence of gravity alone, following a parabolic trajectory in a uniform gravitational field.",
+      "Visual_Triggers": [
+        "throwing",
+        "launching",
+        "arc trajectory",
+        "falling",
+        "mid-air",
+        "landing"
+      ],
+      "Latent_Properties": [
+        "initial_velocity (v₀, m/s): magnitude and direction at launch cannot be measured directly from a single video frame",
+        "launch_angle (θ, degrees): angle relative to horizontal is not annotated in video metadata",
+        "time_of_flight (t_total, s): total duration from launch to landing requires timing not always provided",
+        "maximum_height (h_max, m): peak of trajectory must be calculated from motion equations",
+        "air_resistance_coefficient (k, kg/s): drag parameter is material/environment dependent and invisible"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows launch and landing points with known horizontal distance, trigger: code_executor(formula='range = (v₀² * sin(2θ)) / g'). Use to solve for v₀ or θ if one is known.",
+        "Condition_2": "If object type is identifiable but material properties are unknown, trigger: web_search(query='typical drag coefficient for [object] in air').",
+        "Condition_3": "If video includes a scale reference (e.g., a person of known height), trigger: code_executor(formula='trajectory: y = x*tanθ - (g*x²)/(2*v₀²*cos²θ)'). Fit to observed points to infer v₀ and θ.",
+        "Condition_4": "If the environment (e.g., Earth, Moon) is ambiguous, trigger: web_search(query='gravitational acceleration on [planet/moon]')."
+      },
+      "Graph_Injection": "Add initial_velocity, launch_angle, time_of_flight, maximum_height, and air_resistance_coefficient as leaf nodes to Object nodes via has_property edge.",
+      "Example_Question_Sketch": "Given a video of a basketball shot where the hoop height and horizontal distance are visible, but the launch angle is unknown, calculate the minimum initial speed required to make the basket, then determine if the same shot would succeed on the Moon.",
+      "Relevant_Formulas": [
+        "Horizontal range: R = (v₀² * sin(2θ)) / g, where v₀ = initial speed, θ = launch angle, g = gravitational acceleration",
+        "Time of flight: t = (2 * v₀ * sinθ) / g",
+        "Maximum height: h_max = (v₀² * sin²θ) / (2g)",
+        "Position equations: x(t) = v₀ * cosθ * t, y(t) = v₀ * sinθ * t - (1/2) * g * t²"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Circular_Motion",
+      "Description": "An object moves along a circular path with constant or varying speed, experiencing centripetal acceleration toward the center of the circle.",
+      "Visual_Triggers": [
+        "rotating",
+        "spinning",
+        "orbiting",
+        "whirling",
+        "revolving",
+        "turning in a circle"
+      ],
+      "Latent_Properties": [
+        "centripetal_force (F_c, N): Cannot be directly observed because it is the net inward force causing circular motion, not visible as a separate entity in the video.",
+        "angular_velocity (ω, rad/s): Cannot be directly observed because it requires knowledge of the exact angle swept per unit time, which is not explicitly marked in the video.",
+        "radius_of_curvature (r, m): Cannot be directly observed because the exact scale and center of the circular path are not provided in the video frame.",
+        "coefficient_of_friction (μ, unitless): Cannot be directly observed because it is a material property of the surfaces in contact, not visible in the video.",
+        "period_of_revolution (T, s): Cannot be directly observed because it requires timing multiple cycles precisely, which may not be explicitly measured in the video."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If the video shows an object moving in a circle and the radius can be estimated from known reference objects, trigger: code_executor(formula='F_c = m*v^2/r'). Use known mass from web_search or visible context.",
+        "Condition_2": "If the video shows a car turning on a road or similar scenario, trigger: web_search(query='typical coefficient of friction between tire and asphalt') to estimate maximum safe speed.",
+        "Condition_3": "If the video shows a rotating object with visible markings but unknown mass, trigger: web_image_search(query='object name material density') to estimate mass for force calculation.",
+        "Condition_4": "If the video shows periodic circular motion with timed revolutions, trigger: code_executor(formula='ω = 2π/T') to compute angular velocity from measured period."
+      },
+      "Graph_Injection": "Add centripetal_force as a leaf node to Object nodes via causes edge. Add angular_velocity as a leaf node to Motion nodes via has_property edge. Add radius_of_curvature as a leaf node to Path nodes via has_attribute edge.",
+      "Example_Question_Sketch": "A video shows a car turning on a wet road; first use web_search to find the coefficient of friction for wet asphalt, then use code_executor to calculate the maximum safe speed before skidding, given the turn radius estimated from road markings.",
+      "Relevant_Formulas": [
+        "F_c = m * v^2 / r, where F_c is centripetal force, m is mass, v is tangential speed, r is radius.",
+        "a_c = v^2 / r = ω^2 * r, where a_c is centripetal acceleration, ω is angular velocity.",
+        "v_max = sqrt(μ * g * r), where v_max is maximum safe speed without skidding, μ is coefficient of friction, g is gravitational acceleration.",
+        "ω = 2π / T, where T is period of revolution."
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Spring_Oscillation",
+      "Description": "A mass attached to a spring undergoes periodic back-and-forth motion about an equilibrium position due to restoring forces proportional to displacement.",
+      "Visual_Triggers": [
+        "oscillating",
+        "bouncing on spring",
+        "compressing and extending",
+        "vibrating",
+        "periodic motion",
+        "harmonic movement"
+      ],
+      "Latent_Properties": [
+        "spring_constant (k, N/m): Cannot be observed directly as it requires force-displacement measurements not visible in video.",
+        "oscillation_period (T, s): Requires precise timing of multiple cycles to calculate, which may not be explicitly measured in video.",
+        "maximum_displacement (A, m): Exact amplitude is difficult to gauge without a calibrated scale reference in the scene.",
+        "mass_of_object (m, kg): The object's mass is an intrinsic property not visually apparent without material identification.",
+        "equilibrium_position (x₀, m): The unstretched spring length may not be shown, making the rest position ambiguous."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If the video shows a known object (e.g., 'steel ball') oscillating on a spring, trigger: web_search(query='density of [object material] and typical dimensions'). Use results to estimate mass.",
+        "Condition_2": "If the oscillation period can be counted from video timestamps, trigger: code_executor(formula='T = t_cycles / n'). Calculate period from total time and cycle count.",
+        "Condition_3": "If the spring type is identifiable (e.g., 'coil spring'), trigger: web_image_search(query='[spring type] spring constant range'). Use to bound k values.",
+        "Condition_4": "If displacement amplitude is compared to a reference object, trigger: code_executor(formula='A = scale_factor * reference_length'). Compute amplitude using proportional scaling."
+      },
+      "Graph_Injection": "Add spring_constant (k) as a leaf node to Object nodes via has_property edge. Add oscillation_period (T) as a leaf node to Event nodes via has_parameter edge. Add maximum_displacement (A) as a leaf node to Event nodes via has_parameter edge. Connect these nodes via influences edges to represent physical dependencies.",
+      "Example_Question_Sketch": "Given a video of a metal block oscillating on a spring with 5 cycles in 2 seconds and a displacement of 0.1m, use material lookup to find the block's mass, then compute the spring constant using the oscillation period formula.",
+      "Relevant_Formulas": [
+        "T = 2π√(m/k) where T is period (s), m is mass (kg), k is spring constant (N/m)",
+        "f = 1/T where f is frequency (Hz)",
+        "F = -kΔx where F is restoring force (N), Δx is displacement from equilibrium (m)",
+        "ω = √(k/m) where ω is angular frequency (rad/s)"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Pulley_System",
+      "Description": "A mechanical system where ropes or cables run over grooved wheels to change the direction of applied force and potentially provide mechanical advantage.",
+      "Visual_Triggers": [
+        "rope moving over wheel",
+        "weights moving vertically",
+        "pulley rotating",
+        "tension in cable",
+        "counterweight motion",
+        "mechanical advantage setup"
+      ],
+      "Latent_Properties": [
+        "tension_in_rope (T, N): Cannot be directly observed as it's an internal force within the rope that requires knowledge of masses and acceleration.",
+        "mechanical_advantage (MA, unitless): Hidden property determined by pulley configuration and rope arrangement, not visible from motion alone.",
+        "friction_at_axle (f, N): Internal friction at pulley bearings that dissipates energy but cannot be measured visually.",
+        "rope_mass_density (μ, kg/m): Material property of the rope that affects dynamics but not discernible from video.",
+        "angular_acceleration_of_pulley (α, rad/s²): Requires precise rotational kinematics measurement beyond typical video observation."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If masses of hanging objects are visible but rope tension is unknown, trigger: code_executor(formula='T = m*g ± m*a'). Use known masses and observed acceleration direction.",
+        "Condition_2": "If pulley system configuration is visible but mechanical advantage is unclear, trigger: web_search(query='mechanical advantage formula for [number] movable pulleys system').",
+        "Condition_3": "If materials of rope or pulley are visible but properties unknown, trigger: web_image_search(query='[material type] rope density coefficient friction').",
+        "Condition_4": "If system shows energy loss but no visible cause, trigger: code_executor(formula='energy_loss = (m1*g*h1 + m2*g*h2) - (0.5*m1*v1² + 0.5*m2*v2²)')."
+      },
+      "Graph_Injection": "Add tension_in_rope as a leaf node to Object nodes via has_property edge. Add mechanical_advantage as a leaf node to System nodes via has_property edge. Add friction_at_axle as a leaf node to Mechanical_Component nodes via has_property edge.",
+      "Example_Question_Sketch": "Given a video showing a 4:1 pulley system lifting a 50kg crate with observed acceleration, calculate the force the worker must apply to the rope while accounting for 15% energy loss due to friction, requiring code_executor for the multi-step calculation.",
+      "Relevant_Formulas": [
+        "T = m*g ± m*a (T = tension, m = mass, g = gravity, a = acceleration)",
+        "MA = F_output / F_input = number of rope segments supporting load",
+        "Στ = I*α (τ = torque, I = moment of inertia, α = angular acceleration)",
+        "F_applied = (m_load * g / MA) + (m_load * a / MA) + f_friction"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Inclined_Plane",
+      "Description": "An object accelerates down a sloped surface under the influence of gravity, with motion constrained by the incline angle and friction.",
+      "Visual_Triggers": [
+        "sliding down slope",
+        "rolling down incline",
+        "object on tilted surface",
+        "accelerating down ramp",
+        "stationary on slope",
+        "released from rest on incline"
+      ],
+      "Latent_Properties": [
+        "incline_angle (θ, degrees or radians): cannot be measured precisely from 2D video without reference scale or known dimensions",
+        "coefficient_of_friction (μ, dimensionless): material property not visible; requires knowledge of surface and object materials",
+        "normal_force (N, N): contact force perpendicular to surface; cannot be directly observed without force measurement",
+        "net_force_parallel (F_net, N): component of gravitational force along incline minus friction; hidden as it determines acceleration",
+        "acceleration_down_incline (a, m/s²): rate of velocity change; requires timing measurements and distance scaling not directly available"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If object material is visible but friction coefficient unknown, trigger: web_search(query='coefficient of friction [material1] on [material2]').",
+        "Condition_2": "If incline angle is not given but object dimensions and vertical drop are measurable, trigger: code_executor(formula='θ = arctan(height/length)').",
+        "Condition_3": "If object is sliding with constant velocity (not accelerating), trigger: code_executor(formula='μ = tan(θ) for constant velocity motion').",
+        "Condition_4": "If object acceleration is needed but only position/time data available, trigger: code_executor(formula='a = 2*d/(t²) from rest')."
+      },
+      "Graph_Injection": "Add incline_angle as a leaf node to Object nodes via has_property edge. Add coefficient_of_friction as a leaf node to Surface nodes via has_property edge. Add normal_force and net_force_parallel as leaf nodes to Force nodes via quantified_by edge. Add acceleration_down_incline as a leaf node to Motion nodes via described_by edge.",
+      "Example_Question_Sketch": "If a wooden block slides 4 meters down a 30° incline in 2 seconds, what is the coefficient of kinetic friction between the block and surface? (requires calculating acceleration, then solving friction equation)",
+      "Relevant_Formulas": [
+        "a = g*sin(θ) - μ*g*cos(θ) where a=acceleration, g=gravity, θ=incline angle, μ=friction coefficient",
+        "N = m*g*cos(θ) where N=normal force, m=mass, g=gravity, θ=incline angle",
+        "F_parallel = m*g*sin(θ) where F_parallel=gravitational force component along incline",
+        "μ = tan(θ) for object sliding at constant velocity (acceleration=0)"
+      ]
+    },
+    {
+      "Event_Category": "Mechanics/Free_Fall",
+      "Description": "An object accelerates downward under gravity with negligible air resistance, starting from rest or with initial downward velocity.",
+      "Visual_Triggers": [
+        "falling",
+        "dropped",
+        "descending",
+        "accelerating downward",
+        "in free fall",
+        "gravity acting"
+      ],
+      "Latent_Properties": [
+        "gravitational_acceleration (g, m/s²): local value depends on altitude and latitude, not visible in video",
+        "initial_height (h₀, m): vertical starting position relative to ground is often not calibrated in video",
+        "initial_velocity (v₀, m/s): downward speed at release may be nonzero but visually indistinguishable from rest",
+        "air_resistance_coefficient (c, kg/m): depends on object shape and medium density, requires material lookup",
+        "fall_duration (t, s): exact time from release to impact may not be timestamped in video"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows object dropped from rest and impact time is known, trigger: code_executor(formula='h = 0.5 * g * t^2', inputs={'t': fall_duration, 'g': 9.81}). Compute height.",
+        "Condition_2": "If object material/shape is visible but g unknown, trigger: web_search(query='gravitational acceleration at [location] latitude altitude'). Retrieve local g.",
+        "Condition_3": "If object is falling near Earth's surface with unknown initial velocity, trigger: code_executor(formula='v = v₀ + g*t', inputs={'v₀': 0, 'g': 9.81, 't': time_interval}). Compute velocity after interval.",
+        "Condition_4": "If object appears aerodynamic (e.g., feather) and falls slowly, trigger: web_image_search(query='[object] drag coefficient'). Identify air resistance properties."
+      },
+      "Graph_Injection": "Add gravitational_acceleration as a leaf node to Object nodes via has_property edge. Add initial_height as a leaf node to Scene nodes via has_context edge. Add initial_velocity as a leaf node to Motion nodes via has_parameter edge.",
+      "Example_Question_Sketch": "If a ball is dropped from a building and takes 4.2 seconds to hit the ground, but the local gravity is 9.78 m/s² due to altitude, what was the height of the building?",
+      "Relevant_Formulas": [
+        "h = h₀ + v₀t + 0.5gt² (h: height at time t, h₀: initial height, v₀: initial velocity, g: gravitational acceleration, t: time)",
+        "v = v₀ + gt (v: velocity at time t)",
+        "v² = v₀² + 2gΔh (Δh: displacement)",
+        "t = √(2h/g) (for free fall from rest, no air resistance)"
+      ]
+    },
+    {
+      "Event_Category": "Thermodynamics/Heat_Transfer",
+      "Description": "The spontaneous transfer of thermal energy from a higher-temperature object to a lower-temperature object through conduction, convection, or radiation.",
+      "Visual_Triggers": [
+        "steam rising",
+        "ice melting",
+        "metal glowing",
+        "water boiling",
+        "pan sizzling",
+        "frost forming"
+      ],
+      "Latent_Properties": [
+        "thermal conductivity (k, W/(m·K)): material property not visible; must be known from object composition",
+        "heat transfer coefficient (h, W/(m²·K)): depends on fluid motion and surface conditions not fully observable",
+        "emissivity (ε, unitless): surface radiation property invisible to naked eye",
+        "temperature difference (ΔT, K or °C): exact temperatures of objects often not measurable from video",
+        "heat flux (q, W/m²): rate of energy transfer per area cannot be directly seen"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows metal cooking pan on stove with food sizzling, trigger: web_search(query='thermal conductivity of common pan materials aluminum vs stainless steel').",
+        "Condition_2": "If video shows ice cube melting in liquid, trigger: code_executor(formula='Q = m*L_f' where Q=heat absorbed, m=mass of ice, L_f=latent heat of fusion).",
+        "Condition_3": "If video shows radiator heating a room with visible convection currents, trigger: web_search(query='typical heat transfer coefficients for natural convection in air').",
+        "Condition_4": "If video shows object glowing red-hot, trigger: code_executor(formula='P = ε*σ*A*T^4' where P=radiative power, ε=emissivity, σ=Stefan-Boltzmann constant, A=surface area, T=temperature)."
+      },
+      "Graph_Injection": "Add thermal_conductivity as a leaf node to Material nodes via has_property edge. Add heat_transfer_coefficient as a leaf node to Interface nodes via characterized_by edge. Add temperature_difference as a leaf node to Object nodes via experiences edge connecting to Temperature nodes.",
+      "Example_Question_Sketch": "Given a video of a copper pot boiling water, if the pot base is 2mm thick with 15cm diameter and water boils at 100°C while stove burner is at 250°C, calculate the conductive heat flux through the pot base using copper's thermal conductivity.",
+      "Relevant_Formulas": [
+        "Fourier's Law: q = -k * (dT/dx) where q=heat flux (W/m²), k=thermal conductivity (W/(m·K)), dT/dx=temperature gradient (K/m)",
+        "Newton's Law of Cooling: Q = h * A * ΔT where Q=heat transfer rate (W), h=heat transfer coefficient (W/(m²·K)), A=surface area (m²), ΔT=temperature difference (K)",
+        "Stefan-Boltzmann Law: P = ε * σ * A * T⁴ where P=radiative power (W), ε=emissivity, σ=5.67×10⁻⁸ W/(m²·K⁴), A=area (m²), T=temperature (K)",
+        "Latent Heat: Q = m * L where Q=heat (J), m=mass (kg), L=latent heat of fusion/vaporization (J/kg)"
+      ]
+    },
+    {
+      "Event_Category": "Thermodynamics/Melting_Solidification",
+      "Description": "A solid material transitions to liquid phase (melting) or a liquid material transitions to solid phase (solidification) due to heat transfer.",
+      "Visual_Triggers": [
+        "melting",
+        "solidifying",
+        "changing state",
+        "phase transition",
+        "liquefying",
+        "freezing"
+      ],
+      "Latent_Properties": [
+        "melting_point (T_m, °C or K): specific temperature at which solid melts; requires material identification",
+        "latent_heat_of_fusion (L_f, J/kg): energy per unit mass for phase change; material-specific property",
+        "heat_transfer_rate (Q_dot, W): rate of energy flow causing phase change; depends on thermal environment",
+        "mass (m, kg): amount of material undergoing phase change; cannot be measured from video",
+        "thermal_conductivity (k, W/(m·K)): material property affecting heat flow rate; requires material lookup"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If material is visually identifiable but properties unknown, trigger: web_search(query='[material] melting point latent heat of fusion').",
+        "Condition_2": "If phase change duration and material properties are known, trigger: code_executor(formula='m = Q/(L_f) where Q = Q_dot × Δt').",
+        "Condition_3": "If temperature environment is described but material unknown, trigger: web_image_search(query='[object description] material identification').",
+        "Condition_4": "If heat source characteristics are given, trigger: code_executor(formula='Q_dot = k × A × ΔT/d for conductive heating')."
+      },
+      "Graph_Injection": "Add melting_point, latent_heat_of_fusion, and thermal_conductivity as leaf nodes to Material nodes via has_property edge. Add mass and heat_transfer_rate as leaf nodes to Object nodes via has_attribute edge.",
+      "Example_Question_Sketch": "Given a video of an ice cube melting completely in 5 minutes with a measured heat transfer rate of 50 W, calculate the mass of the ice cube using the latent heat of fusion of water.",
+      "Relevant_Formulas": [
+        "Q = m × L_f, where Q is heat energy (J), m is mass (kg), L_f is latent heat of fusion (J/kg)",
+        "Q_dot = ΔQ/Δt, where Q_dot is heat transfer rate (W), Δt is time interval (s)",
+        "T ≥ T_m for melting, T ≤ T_m for solidification, where T is material temperature, T_m is melting point",
+        "Q_dot = k × A × (T_hot - T_cold)/d for conductive heat transfer, where k is thermal conductivity, A is area, d is thickness"
+      ]
+    },
+    {
+      "Event_Category": "Thermodynamics/Evaporation_Condensation",
+      "Description": "Phase change between liquid and vapor driven by heat transfer and vapor pressure differences.",
+      "Visual_Triggers": [
+        "steam rising",
+        "fog forming",
+        "water droplets appearing",
+        "liquid surface receding",
+        "mist dissipating",
+        "condensation on surface"
+      ],
+      "Latent_Properties": [
+        "vapor_pressure (P_v, Pa): Cannot be observed because it depends on temperature and material properties not visible in video.",
+        "relative_humidity (RH, %): Requires knowledge of actual vs. saturated vapor pressure which cannot be measured visually.",
+        "latent_heat_of_vaporization (L_v, J/kg): Material-specific property not discernible from visual appearance alone.",
+        "dew_point_temperature (T_d, °C): Temperature at which condensation begins depends on humidity and pressure invisible in video.",
+        "evaporation_rate (dm/dt, kg/s): Mass transfer rate depends on surface area, temperature gradient, and airflow not fully observable."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows condensation forming on a cold surface, trigger: web_search(query='latent heat of vaporization of water at 25°C').",
+        "Condition_2": "If video shows steam rising from hot liquid, trigger: code_executor(formula='P_sat = 611.21 * exp((18.678 - T/234.5)*(T/(257.14+T))) for T=95°C').",
+        "Condition_3": "If video shows fog formation outdoors, trigger: web_search(query='typical relative humidity for fog formation at 15°C').",
+        "Condition_4": "If video shows rapid evaporation from a container, trigger: code_executor(formula='dm/dt = (h * A * (P_sat - P_v))/(L_v * R * T)')."
+      },
+      "Graph_Injection": "Add vapor_pressure as a leaf node to Temperature nodes via depends_on edge. Add relative_humidity as a leaf node to vapor_pressure nodes via calculated_from edge. Add latent_heat_of_vaporization as a leaf node to Material nodes via property_of edge. Add dew_point_temperature as a leaf node to relative_humidity nodes via determines edge.",
+      "Example_Question_Sketch": "Given a video showing steam rising from a 95°C tea cup in a room at 25°C with 60% RH, calculate how much water evaporates in 5 minutes if the cup's surface area is 0.02 m², requiring code_executor for the evaporation rate formula.",
+      "Relevant_Formulas": [
+        "Clausius-Clapeyron: ln(P2/P1) = (L_v/R) * (1/T1 - 1/T2) where P is vapor pressure, L_v is latent heat, R is gas constant, T is temperature.",
+        "Relative humidity: RH = (P_v / P_sat) * 100% where P_v is actual vapor pressure, P_sat is saturation vapor pressure.",
+        "Evaporation rate: dm/dt = (h * A * (P_sat - P_v)) / (L_v) where h is mass transfer coefficient, A is surface area.",
+        "Dew point approximation: T_d = T - ((100 - RH)/5) where T is air temperature, RH is relative humidity."
+      ]
+    },
+    {
+      "Event_Category": "Thermodynamics/Thermal_Expansion",
+      "Description": "Change in dimensions of a material due to temperature variation, causing observable deformation or movement.",
+      "Visual_Triggers": [
+        "expanding",
+        "contracting",
+        "bending",
+        "gaps closing",
+        "length increasing",
+        "volume changing"
+      ],
+      "Latent_Properties": [
+        "coefficient_of_linear_expansion (α, 1/K): material-specific constant not visible without prior knowledge",
+        "temperature_change (ΔT, K): actual temperature difference not directly measurable from visual cues",
+        "initial_length (L₀, m): original dimension before heating/cooling not shown in video",
+        "thermal_stress (σ, Pa): internal stress due to constrained expansion, invisible without material properties"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If material type is identifiable but expansion coefficient unknown, trigger: web_search(query='[material] linear expansion coefficient α value').",
+        "Condition_2": "If temperature change is mentioned but not quantified, trigger: web_search(query='typical temperature change for [context] in Kelvin').",
+        "Condition_3": "If initial/final dimensions and temperature change are known, trigger: code_executor(formula='ΔL = α * L₀ * ΔT').",
+        "Condition_4": "If expansion is constrained and material properties known, trigger: code_executor(formula='σ = E * α * ΔT')."
+      },
+      "Graph_Injection": "Add coefficient_of_linear_expansion as a leaf node to Material nodes via has_property edge. Add temperature_change as a leaf node to Environment nodes via experiences edge. Add initial_length as a leaf node to Object nodes via has_dimension edge. Add thermal_stress as a leaf node to Object nodes via undergoes edge.",
+      "Example_Question_Sketch": "If a steel rail expands by 2 cm after temperature increases by 40 K, what was its original length, and what thermal stress develops if both ends are fixed?",
+      "Relevant_Formulas": [
+        "ΔL = α * L₀ * ΔT where ΔL=length change, α=linear expansion coefficient, L₀=initial length, ΔT=temperature change",
+        "ΔV = β * V₀ * ΔT where ΔV=volume change, β=volume expansion coefficient (≈3α), V₀=initial volume",
+        "σ = E * α * ΔT where σ=thermal stress, E=Young's modulus, α=linear expansion coefficient, ΔT=temperature change",
+        "L_f = L₀ * (1 + α * ΔT) where L_f=final length"
+      ]
+    },
+    {
+      "Event_Category": "Thermodynamics/Combustion",
+      "Description": "A rapid exothermic chemical reaction between a fuel and an oxidant, typically producing heat, light, and reaction products like gases and smoke.",
+      "Visual_Triggers": [
+        "flame visible",
+        "smoke emitting",
+        "fuel burning",
+        "spark igniting",
+        "heat shimmer",
+        "charring material"
+      ],
+      "Latent_Properties": [
+        "heat of combustion (ΔH_c, kJ/mol): total energy released per mole of fuel burned, depends on molecular structure and cannot be seen",
+        "adiabatic flame temperature (T_ad, K): theoretical maximum temperature if no heat loss occurs, requires thermodynamic calculations",
+        "fuel mass flow rate (ṁ_fuel, kg/s): rate of fuel consumption, hidden as internal flow or vaporization",
+        "oxygen consumption rate (ṁ_O2, kg/s): oxidizer mass consumed per second, not directly observable in air",
+        "combustion efficiency (η, %): fraction of fuel energy converted to useful heat vs losses, requires calorimetry"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If fuel type is identifiable (e.g., wood, propane, gasoline), trigger: web_search(query='heat of combustion [fuel] kJ/mol').",
+        "Condition_2": "If fuel mass or volume and burn duration are estimable from video, trigger: code_executor(formula='ṁ_fuel = mass_fuel / time_burn').",
+        "Condition_3": "If fuel and oxidizer are known, trigger: code_executor(formula='T_ad = f(ΔH_c, c_p, stoichiometry)').",
+        "Condition_4": "If flame color or smoke density suggests incomplete combustion, trigger: web_search(query='combustion efficiency typical values [fuel]')."
+      },
+      "Graph_Injection": "Add ΔH_c as a leaf node to 'fuel' nodes via 'has_property' edge. Add T_ad as a leaf node to 'flame' nodes via 'characterized_by' edge. Add ṁ_fuel as a leaf node to 'fuel_source' nodes via 'consumption_rate' edge. Add η as a leaf node to 'reaction' nodes via 'efficiency' edge.",
+      "Example_Question_Sketch": "Given a video showing a propane burner heating water, if the burner consumes 0.5 kg of propane in 2 minutes and the water temperature rises by 40°C, use code_executor to calculate the heat transfer efficiency of the system, requiring lookup of propane's heat of combustion and water's specific heat.",
+      "Relevant_Formulas": [
+        "Q_released = ΔH_c × n_fuel, where Q_released is total heat released (J), n_fuel is moles of fuel",
+        "η = (m_water × c_p × ΔT) / (ΔH_c × m_fuel) × 100%, where η is efficiency (%), m_water is water mass (kg), c_p is specific heat (J/kg·K), ΔT is temperature change (K), m_fuel is fuel mass (kg)",
+        "T_ad = T_initial + (ΔH_c) / (Σ n_i × c_p,i), where T_ad is adiabatic flame temperature (K), n_i and c_p,i are moles and heat capacities of products",
+        "ṁ_O2 = (AFR_stoich × ṁ_fuel) / (1 + AFR_stoich), where AFR_stoich is stoichiometric air-to-fuel ratio"
+      ]
+    },
+    {
+      "Event_Category": "Fluid_Dynamics/Pouring_Flow",
+      "Description": "The continuous transfer of a liquid from one container to another under gravity, characterized by a falling stream with varying cross-section and velocity.",
+      "Visual_Triggers": [
+        "pouring",
+        "liquid stream",
+        "flowing from container",
+        "filling a vessel",
+        "continuous discharge",
+        "gravity-driven flow"
+      ],
+      "Latent_Properties": [
+        "flow_rate (Q, m³/s): Cannot be directly measured from video without knowing stream velocity profile and cross-sectional area.",
+        "viscosity (μ, Pa·s): An intrinsic fluid property not visually distinguishable without observing flow resistance effects.",
+        "exit_velocity (v₀, m/s): Initial speed at pour spout requires knowing height difference and flow rate to calculate.",
+        "stream_contraction_coefficient (C_c, dimensionless): Ratio of jet area to orifice area depends on fluid properties and geometry.",
+        "Reynolds_number (Re, dimensionless): Determines flow regime (laminar/turbulent) but requires velocity, length scale, and viscosity."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows pouring from a container with visible spout diameter, trigger: web_search(query='typical contraction coefficient for water pouring from circular orifice').",
+        "Condition_2": "If video shows liquid falling into another container with measurable height difference, trigger: code_executor(formula='v = sqrt(2*g*h + v0²) to calculate impact velocity').",
+        "Condition_3": "If video shows steady pouring with identifiable liquid type, trigger: web_search(query='dynamic viscosity of [liquid] at room temperature').",
+        "Condition_4": "If video shows turbulent vs laminar stream patterns, trigger: code_executor(formula='Re = ρ*v*d/μ to determine flow regime')."
+      },
+      "Graph_Injection": "Add flow_rate as a leaf node to Container nodes via has_property edge. Add viscosity as a leaf node to Liquid nodes via has_property edge. Add exit_velocity as a leaf node to Pour_Action nodes via has_parameter edge. Add Reynolds_number as a leaf node to Stream nodes via characterized_by edge.",
+      "Example_Question_Sketch": "Given a video of water being poured from a 5cm diameter bottle into a beaker 30cm below, if the flow appears turbulent, calculate the approximate flow rate using the Reynolds number and viscosity of water.",
+      "Relevant_Formulas": [
+        "Q = A·v (flow rate = cross-sectional area × velocity)",
+        "v² = v₀² + 2gh (Torricelli's law for velocity after falling height h)",
+        "Re = (ρ·v·d)/μ (Reynolds number for pipe flow, where d is characteristic diameter)",
+        "A_jet = C_c·A_orifice (contracted jet area = coefficient × orifice area)"
+      ]
+    },
+    {
+      "Event_Category": "Fluid_Dynamics/Splashing_Impact",
+      "Description": "A fluid droplet or object impacts a liquid surface, creating a crown-like splash, cavity formation, and secondary droplet ejection.",
+      "Visual_Triggers": [
+        "droplet hitting surface",
+        "crown splash forming",
+        "cavity opening in liquid",
+        "secondary droplets ejecting",
+        "impact crater visible",
+        "splash height increasing"
+      ],
+      "Latent_Properties": [
+        "impact_velocity (v, m/s): cannot be directly measured from video without scale and timing reference",
+        "droplet_diameter (D, m): requires known scale or comparison object not always present",
+        "fluid_density (ρ, kg/m³): material property not visually distinguishable",
+        "surface_tension (σ, N/m): microscopic property that influences splash threshold",
+        "impact_angle (θ, degrees): 3D orientation may be ambiguous from 2D video"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a falling droplet but no scale reference, trigger: web_search(query='typical raindrop diameter range'). Use result as prior for code_executor.",
+        "Condition_2": "If video shows splash crown formation, trigger: code_executor(formula='We = ρ*v²*D/σ'). Calculate Weber number to determine if splashing occurs.",
+        "Condition_3": "If video shows impact with visible scale object, trigger: code_executor(formula='v = sqrt(2*g*h)'). Estimate impact velocity from fall height.",
+        "Condition_4": "If fluid type is ambiguous, trigger: web_image_search(query='water vs oil splash comparison'). Identify fluid from visual characteristics."
+      },
+      "Graph_Injection": "Add impact_velocity as a leaf node to Object nodes via has_property edge. Add droplet_diameter as a leaf node to Object nodes via has_property edge. Add fluid_density and surface_tension as leaf nodes to Material nodes via has_property edge. Add impact_angle as a leaf node to Action nodes via has_parameter edge.",
+      "Example_Question_Sketch": "Given a video of a raindrop splashing into a puddle, if the splash crown reaches 8 cm high and the droplet fell from 1.2 m, calculate the Weber number to determine if secondary droplet ejection should occur (requires density and surface tension lookup).",
+      "Relevant_Formulas": [
+        "Weber number: We = ρ * v² * D / σ, where ρ=fluid density, v=impact velocity, D=droplet diameter, σ=surface tension",
+        "Impact velocity from height: v = √(2 * g * h), where g=9.81 m/s², h=fall height",
+        "Splash threshold: We > We_critical ≈ 100-300 for water (depends on surface conditions)",
+        "Crown diameter: D_crown ≈ 2 * D * √(We) for early times"
+      ]
+    },
+    {
+      "Event_Category": "Fluid_Dynamics/Buoyancy_Floating",
+      "Description": "An object floats at the interface between two fluids (typically liquid and air) when the buoyant force equals the object's weight.",
+      "Visual_Triggers": [
+        "floating on surface",
+        "partially submerged",
+        "bobbing gently",
+        "resting at interface",
+        "waterline visible",
+        "stable equilibrium"
+      ],
+      "Latent_Properties": [
+        "object_density (ρ_obj, kg/m³): cannot be observed directly; requires knowledge of material composition and internal structure",
+        "fluid_density (ρ_fluid, kg/m³): not visually apparent; depends on fluid type, temperature, and salinity",
+        "submerged_volume_fraction (V_sub/V_total, unitless): hidden below the surface; requires 3D geometry and displacement measurement",
+        "buoyant_force (F_b, N): invisible force vector; calculated from pressure integration over submerged surface"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If object is identified and fluid type is known, trigger: web_search(query='density of [object_material] and [fluid_type] at standard conditions').",
+        "Condition_2": "If object dimensions are measurable from video and submerged depth is visible, trigger: code_executor(formula='V_sub = geometric_volume_below_interface(object_shape, waterline_position)').",
+        "Condition_3": "If floating stability analysis is needed, trigger: code_executor(formula='metacentric_height = I_min/V_sub - CG_height').",
+        "Condition_4": "If object material is visually ambiguous, trigger: web_image_search(query='[object_shape] common materials density comparison')."
+      },
+      "Graph_Injection": "Add object_density and fluid_density as leaf nodes to Object and Fluid nodes via has_property edge. Add submerged_volume_fraction as leaf node to Object node via has_state edge. Add buoyant_force as leaf node to Force node via quantified_by edge.",
+      "Example_Question_Sketch": "Given a rectangular wooden block floating in seawater with 40% of its height submerged, calculate what percentage would be submerged if the same block were placed in freshwater, requiring density lookup and buoyancy equilibrium calculation.",
+      "Relevant_Formulas": [
+        "F_b = ρ_fluid * V_sub * g (buoyant force equals weight of displaced fluid)",
+        "ρ_obj/ρ_fluid = V_sub/V_total (floating equilibrium condition for homogeneous objects)",
+        "GM = I_min/V_sub - CG (metacentric height for stability analysis)",
+        "V_sub = f(object_geometry, waterline_position) (submerged volume function)"
+      ]
+    },
+    {
+      "Event_Category": "Fluid_Dynamics/Pressure_Difference",
+      "Description": "Fluid flow driven by a pressure gradient between two regions, causing acceleration from high to low pressure.",
+      "Visual_Triggers": [
+        "liquid flowing",
+        "air moving",
+        "bulging or deflating",
+        "spraying or jetting",
+        "streamlines forming",
+        "pressure gauge changing"
+      ],
+      "Latent_Properties": [
+        "pressure_difference (ΔP, Pa): cannot be seen directly; requires measurement of pressure at two points or inference from flow effects",
+        "density (ρ, kg/m³): intrinsic fluid property not visible; requires material identification or lookup",
+        "flow_velocity (v, m/s): instantaneous speed of fluid particles cannot be measured from single frame; requires tracking over time",
+        "viscosity (μ, Pa·s): internal friction property invisible; depends on fluid type and temperature",
+        "cross_sectional_area (A, m²): may be partially visible but exact dimensions often require scale reference or object recognition"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If fluid type is identifiable (e.g., water, air) but properties unknown, trigger: web_search(query='density and viscosity of [fluid] at room temperature').",
+        "Condition_2": "If flow geometry is visible (e.g., pipe, nozzle) but dimensions unclear, trigger: web_image_search(query='[object] dimensions standard sizes') to estimate area.",
+        "Condition_3": "If pressure difference is implied by flow speed or deformation, trigger: code_executor(formula='ΔP = 0.5*ρ*v² + ρ*g*h + losses') to compute from Bernoulli or energy equation.",
+        "Condition_4": "If the system involves a known pressure source (e.g., pump, compressed tank), trigger: page_browser(url='engineeringtoolbox.com/pressure-ratings') for typical operating pressures."
+      },
+      "Graph_Injection": "Add ΔP as a leaf node to FLOW_EVENT nodes via 'has_pressure_difference' edge. Add ρ and μ as leaf nodes to FLUID nodes via 'has_property' edge. Add v as leaf node to FLOW_EVENT nodes via 'has_velocity' edge. Add A as leaf node to CONTAINER/CHANNEL nodes via 'has_area' edge.",
+      "Example_Question_Sketch": "Given a video of water spraying from a small hole in a tank, if the hole diameter is 2 cm and the water stream lands 1.5 m away horizontally from a point 0.8 m below the hole, use code_executor to calculate the pressure difference between the inside and outside of the tank at the hole location.",
+      "Relevant_Formulas": [
+        "Bernoulli equation: P₁ + 0.5*ρ*v₁² + ρ*g*h₁ = P₂ + 0.5*ρ*v₂² + ρ*g*h₂, where P is pressure, ρ density, v velocity, g gravity, h height",
+        "Pressure difference from flow rate: ΔP = (8*μ*L*Q)/(π*R⁴) for laminar pipe flow (Hagen–Poiseuille), where μ viscosity, L length, Q flow rate, R radius",
+        "Torricelli's law: v = √(2*ΔP/ρ) for ideal fluid from small opening",
+        "Hydrostatic pressure: ΔP = ρ*g*Δh for static fluid column"
+      ]
+    },
+    {
+      "Event_Category": "Fluid_Dynamics/Viscous_Flow",
+      "Description": "Flow of a viscous fluid where internal friction between fluid layers creates velocity gradients and energy dissipation.",
+      "Visual_Triggers": [
+        "fluid flowing slowly",
+        "thick liquid moving",
+        "velocity gradient visible",
+        "boundary layer formation",
+        "parabolic velocity profile",
+        "energy dissipation observed"
+      ],
+      "Latent_Properties": [
+        "dynamic_viscosity (μ, Pa·s): internal property of fluid that determines resistance to shear, cannot be seen directly",
+        "kinematic_viscosity (ν, m²/s): ratio of dynamic viscosity to density, requires both μ and ρ to calculate",
+        "Reynolds_number (Re, dimensionless): dimensionless parameter indicating flow regime, requires velocity, length scale, and ν",
+        "shear_stress (τ, Pa): internal friction force per area between fluid layers, requires μ and velocity gradient",
+        "pressure_drop (ΔP, Pa): pressure loss due to viscous friction along flow path, requires measurements at two points"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If fluid type is identifiable from video (e.g., honey, oil, water), trigger: web_search(query='dynamic viscosity of [fluid] at [temperature]').",
+        "Condition_2": "If flow velocity and pipe/tube diameter are measurable from video, trigger: code_executor(formula='Re = (ρ*v*D)/μ').",
+        "Condition_3": "If flow is through a pipe with known length and pressure measurements visible, trigger: code_executor(formula='ΔP = (8*μ*L*Q)/(π*R⁴)').",
+        "Condition_4": "If fluid appears to have changing viscosity (non-Newtonian behavior), trigger: web_search(query='[fluid name] viscosity curve shear rate dependence')."
+      },
+      "Graph_Injection": "Add dynamic_viscosity as a leaf node to Fluid nodes via has_property edge. Add Reynolds_number as a leaf node to Flow nodes via characterized_by edge. Add shear_stress as a leaf node to FluidLayer nodes via experiences edge. Add pressure_drop as a leaf node to Pipe/Channel nodes via has_loss edge.",
+      "Example_Question_Sketch": "Given a video of oil flowing through a pipe where the flow rate and pipe diameter are measurable, and knowing the oil type from visual identification, calculate the pressure drop over a 5-meter section using the Hagen-Poiseuille equation.",
+      "Relevant_Formulas": [
+        "τ = μ*(dv/dy) where τ is shear stress, μ is dynamic viscosity, dv/dy is velocity gradient",
+        "Re = (ρ*v*L)/μ where Re is Reynolds number, ρ is density, v is velocity, L is characteristic length",
+        "ΔP = (8*μ*L*Q)/(π*R⁴) where ΔP is pressure drop, L is pipe length, Q is volumetric flow rate, R is pipe radius (Hagen-Poiseuille)",
+        "ν = μ/ρ where ν is kinematic viscosity, μ is dynamic viscosity, ρ is density"
+      ]
+    },
+    {
+      "Event_Category": "Electromagnetism/Electric_Circuit",
+      "Description": "A closed loop conducting path where electric current flows due to a voltage source, enabling energy transfer to components like resistors, capacitors, or inductors.",
+      "Visual_Triggers": [
+        "wires connected",
+        "bulb glowing",
+        "battery present",
+        "switch closing",
+        "motor spinning",
+        "meter displaying"
+      ],
+      "Latent_Properties": [
+        "current (I, A): cannot be directly observed as it is the flow of charge inside conductors, requiring measurement tools like ammeters.",
+        "voltage (V, V): not visible as it represents potential difference between points, measurable only with voltmeters.",
+        "resistance (R, Ω): inherent property of materials and components, not discernible from appearance without specification or testing.",
+        "power (P, W): rate of energy transfer, calculated from current and voltage, not directly observable.",
+        "capacitance (C, F): property of capacitors determined by geometry and dielectric, hidden without labeling."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If a video shows a glowing bulb and a battery, trigger: web_search(query='standard incandescent bulb resistance range').",
+        "Condition_2": "If a video shows a capacitor and its labeled voltage rating, trigger: code_executor(formula='Q = C * V') to compute stored charge.",
+        "Condition_3": "If a video shows a series circuit with multiple resistors, trigger: code_executor(formula='R_total = R1 + R2 + R3') to find equivalent resistance.",
+        "Condition_4": "If a video shows a circuit with an unlabeled component, trigger: web_image_search(query='electronic component identification chart') to match visual features."
+      },
+      "Graph_Injection": "Add current (I) as a leaf node to component nodes via 'carries_current' edge. Add voltage (V) as a leaf node to source and component nodes via 'has_potential_difference' edge. Add resistance (R) as a leaf node to resistor nodes via 'has_resistance' edge.",
+      "Example_Question_Sketch": "Given a video showing a 12V battery connected to two series resistors (one identified as 4Ω via labeling, the other unlabeled but visually similar), and a bulb glowing at normal brightness, calculate the power dissipated by the unlabeled resistor after determining its resistance via web search for standard values.",
+      "Relevant_Formulas": [
+        "V = I * R (Ohm's Law: voltage equals current times resistance)",
+        "P = I * V = I^2 * R = V^2 / R (power in a resistive circuit)",
+        "R_series = R1 + R2 + ... (total resistance in series)",
+        "1/R_parallel = 1/R1 + 1/R2 + ... (total resistance in parallel)"
+      ]
+    },
+    {
+      "Event_Category": "Electromagnetism/Magnetic_Attraction_Repulsion",
+      "Description": "Two magnetic objects either move toward each other (attraction) or push apart (repulsion) due to magnetic dipole interactions.",
+      "Visual_Triggers": [
+        "magnets moving together",
+        "magnets pushing apart",
+        "ferromagnetic object accelerating toward magnet",
+        "levitation above magnet",
+        "alignment of magnetic objects",
+        "sudden snap or jump motion"
+      ],
+      "Latent_Properties": [
+        "magnetic dipole moment (m, A·m²): intrinsic property of magnetized objects, cannot be seen directly without measuring torque in uniform field",
+        "magnetic permeability (μ, H/m): material property affecting magnetic response, requires material identification and lookup",
+        "magnetic field strength (B, T): invisible vector field around magnets, requires measurement with sensors",
+        "distance between magnetic centers (r, m): exact separation of magnetic dipoles often obscured by object shapes",
+        "relative magnetic orientation (θ, rad): angle between magnetic moments affects force sign and magnitude, not visually apparent"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows two identical-looking magnets attracting/repelling, trigger: web_search(query='magnetic dipole moment of neodymium magnet N52'). Describe clearly.",
+        "Condition_2": "If video shows a ferromagnetic object (like iron sphere) accelerating toward a magnet, trigger: code_executor(formula='F = (3μ₀/4π) * (m₁*m₂/r⁴) * (1-3cos²θ)'). Describe clearly.",
+        "Condition_3": "If video shows levitation or equilibrium position, trigger: code_executor(formula='F_gravity = F_magnetic = (3μ₀/4π)*(m₁*m₂/r⁴)'). Describe clearly.",
+        "Condition_4": "If video shows unknown magnet material, trigger: web_image_search(query='identify magnet type by color coating'). Describe clearly."
+      },
+      "Graph_Injection": "Add magnetic dipole moment (m) as a leaf node to Object nodes via has_property edge. Add magnetic field strength (B) as a leaf node to Region nodes via has_field edge. Add distance (r) and orientation (θ) as leaf nodes to Relation nodes between Object nodes via has_parameter edge.",
+      "Example_Question_Sketch": "Given a video showing a small iron ball levitating 5 cm below a cylindrical magnet, and knowing the ball's mass is 10 g, use web search to find typical dipole moment for N52 magnets, then calculate the required magnetic dipole moment of the magnet to maintain this equilibrium position.",
+      "Relevant_Formulas": [
+        "F = (3μ₀/4π) * (m₁*m₂/r⁴) * (1-3cos²θ) where μ₀=4π×10⁻⁷ H/m, m=magnetic dipole moment, r=distance, θ=angle between moments",
+        "B = (μ₀/4π) * (3(m·r̂)r̂ - m)/r³ where B=magnetic field, r̂=unit vector",
+        "τ = m × B where τ=torque on magnetic dipole",
+        "U = -m·B where U=potential energy of dipole in field"
+      ]
+    },
+    {
+      "Event_Category": "Electromagnetism/Electromagnetic_Induction",
+      "Description": "A changing magnetic field through a conductor induces an electromotive force (EMF) and current in the conductor.",
+      "Visual_Triggers": [
+        "magnet moving near coil",
+        "coil rotating in magnetic field",
+        "current meter needle deflecting",
+        "light bulb connected to coil glowing",
+        "wire loop being pulled through magnetic field",
+        "changing magnetic flux visualization"
+      ],
+      "Latent_Properties": [
+        "magnetic_field_strength (B, tesla): Cannot be directly observed as magnetic fields are invisible; requires measurement tools.",
+        "rate_of_magnetic_flux_change (dΦ/dt, weber/second): Cannot be directly observed as it requires tracking both magnetic field and area changes over time.",
+        "induced_emf (ε, volt): Cannot be directly observed as it's an electrical potential difference; requires voltmeter measurement.",
+        "induced_current (I, ampere): Cannot be directly observed as it's an electrical flow; requires ammeter measurement.",
+        "coil_resistance (R, ohm): Cannot be directly observed as it's an intrinsic material property requiring electrical testing."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a magnet moving toward/away from a coil and a light bulb glowing, trigger: web_search(query='standard neodymium magnet strength tesla'). Describe clearly.",
+        "Condition_2": "If video shows a rotating coil in a magnetic field with visible angular speed, trigger: code_executor(formula='ε = N * B * A * ω * sin(ωt)'). Describe clearly.",
+        "Condition_3": "If video shows a current meter deflection with known coil material, trigger: web_search(query='copper wire resistivity ohm per meter'). Describe clearly.",
+        "Condition_4": "If video shows wire loop area changing in magnetic field, trigger: code_executor(formula='ε = -d(B*A*cosθ)/dt'). Describe clearly."
+      },
+      "Graph_Injection": "Add magnetic_field_strength as a leaf node to magnet nodes via has_field_strength edge. Add rate_of_magnetic_flux_change as a leaf node to coil nodes via experiences_flux_change edge. Add induced_emf as a leaf node to circuit nodes via has_induced_voltage edge. Add induced_current as a leaf node to wire nodes via carries_current edge.",
+      "Example_Question_Sketch": "Given a video showing a 100-turn coil with 0.05m² area rotating at 1200 rpm in Earth's magnetic field, use code_executor to calculate the peak induced EMF, then determine if it could light a 3V LED bulb.",
+      "Relevant_Formulas": [
+        "Faraday's Law: ε = -N * dΦ/dt, where ε=induced EMF (V), N=number of turns, Φ=magnetic flux (Wb), t=time (s)",
+        "Magnetic Flux: Φ = B * A * cosθ, where B=magnetic field strength (T), A=area (m²), θ=angle between B and normal to area",
+        "Ohm's Law for induced current: I = ε/R, where I=induced current (A), ε=induced EMF (V), R=resistance (Ω)",
+        "EMF in rotating coil: ε = N * B * A * ω * sin(ωt), where ω=angular velocity (rad/s), t=time (s)"
+      ]
+    },
+    {
+      "Event_Category": "Electromagnetism/Electrostatic_Interaction",
+      "Description": "The attraction or repulsion between electrically charged objects due to Coulomb forces without direct contact.",
+      "Visual_Triggers": [
+        "hair standing up",
+        "objects clinging to surfaces",
+        "sparks jumping between objects",
+        "lightweight objects moving toward each other",
+        "repulsion between similar objects",
+        "static discharge visible"
+      ],
+      "Latent_Properties": [
+        "charge_magnitude (q, coulombs): cannot be directly measured from visual appearance; requires knowledge of material properties and contact history",
+        "separation_distance (r, meters): precise distance between charge centers is often ambiguous in video due to perspective and object shapes",
+        "dielectric_constant (κ, unitless): material properties of intervening medium are not visually apparent without material identification",
+        "charge_polarity (sign, unitless): whether objects are positively or negatively charged cannot be determined from visual observation alone"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows objects clinging to a surface after rubbing, trigger: web_search(query='triboelectric series material charging properties').",
+        "Condition_2": "If video shows repulsion between two similar objects, trigger: code_executor(formula='F = k * |q1*q2| / r^2').",
+        "Condition_3": "If video shows sparks between objects with known material, trigger: web_search(query='breakdown voltage air humidity conditions').",
+        "Condition_4": "If video shows lightweight objects attracted to charged rod, trigger: code_executor(formula='E = k*q/r^2')."
+      },
+      "Graph_Injection": "Add charge_magnitude as a leaf node to Object nodes via has_property edge. Add separation_distance as a leaf node to Relation nodes between Object nodes via quantified_by edge. Add dielectric_constant as a leaf node to Environment nodes via characterized_by edge. Add charge_polarity as a leaf node to Object nodes via has_attribute edge.",
+      "Example_Question_Sketch": "If a balloon rubbed on hair attracts paper scraps at 5 cm distance, and the hair-balloon system gained 1e-9 C of charge during rubbing, calculate the force on a paper scrap with induced charge of 1e-11 C using Coulomb's law.",
+      "Relevant_Formulas": [
+        "F = k * |q1 * q2| / r^2 where F is electrostatic force (N), k is Coulomb's constant (8.99e9 N·m²/C²), q1,q2 are charges (C), r is separation (m)",
+        "E = k * q / r^2 where E is electric field strength (N/C), q is source charge (C), r is distance from charge (m)",
+        "V = k * q / r where V is electric potential (V), q is charge (C), r is distance (m)",
+        "F = q * E where F is force on charge in electric field (N), q is charge (C), E is electric field (N/C)"
+      ]
+    },
+    {
+      "Event_Category": "Optics/Reflection",
+      "Description": "Light rays bouncing off a smooth surface at an angle equal to the incident angle, following the law of reflection.",
+      "Visual_Triggers": [
+        "light reflecting",
+        "mirror-like surface",
+        "specular bounce",
+        "glare spot",
+        "shiny surface",
+        "angle matching"
+      ],
+      "Latent_Properties": [
+        "incident angle (θ_i, degrees): cannot be measured directly from 2D video without knowing surface orientation and light source position",
+        "reflected angle (θ_r, degrees): appears identical to incident angle in video but requires 3D geometry to quantify",
+        "surface reflectivity (ρ, unitless): material property not visible; determines intensity of reflected light",
+        "index of refraction (n, unitless): optical property of reflecting medium that affects reflection coefficient"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a clear reflective surface but material is unknown, trigger: web_search(query='[material name] reflectivity coefficient optical properties').",
+        "Condition_2": "If incident and reflected angles appear equal visually but need quantitative verification, trigger: code_executor(formula='θ_r = θ_i').",
+        "Condition_3": "If reflection intensity needs calculation from known light source, trigger: code_executor(formula='I_r = ρ * I_i').",
+        "Condition_4": "If surface material needs visual identification, trigger: web_image_search(query='[surface appearance] material reflective properties')."
+      },
+      "Graph_Injection": "Add incident_angle as a leaf node to Light_Source nodes via incident_on edge. Add reflected_angle as a leaf node to Surface nodes via reflects_at edge. Add surface_reflectivity as a leaf node to Material nodes via has_property edge. Add index_of_refraction as a leaf node to Medium nodes via optical_property edge.",
+      "Example_Question_Sketch": "A laser beam strikes a polished metal surface at 35°; if the metal has 85% reflectivity and the laser outputs 500 mW, what percentage of the original intensity is reflected at what angle, requiring angle verification and intensity calculation?",
+      "Relevant_Formulas": [
+        "θ_i = θ_r (law of reflection: incident angle equals reflected angle)",
+        "I_r = ρ * I_i (reflected intensity equals reflectivity times incident intensity)",
+        "R = ((n_1 - n_2)/(n_1 + n_2))^2 (reflectance at normal incidence for dielectric materials)",
+        "ρ + α + τ = 1 (conservation: reflectivity + absorptivity + transmissivity equals 1)"
+      ]
+    },
+    {
+      "Event_Category": "Optics/Refraction",
+      "Description": "Light changes direction when passing from one transparent medium to another due to a change in speed.",
+      "Visual_Triggers": [
+        "bending at interface",
+        "apparent displacement",
+        "rainbow effect",
+        "distorted view",
+        "shimmering",
+        "light path shift"
+      ],
+      "Latent_Properties": [
+        "refractive_index_n1 (n₁, dimensionless): Cannot be observed because it's an intrinsic material property of the first medium, not visible in the scene.",
+        "refractive_index_n2 (n₂, dimensionless): Cannot be observed because it's an intrinsic material property of the second medium, not visible in the scene.",
+        "incident_angle (θᵢ, degrees or radians): Cannot be directly measured from 2D video without knowing the 3D orientation of the surface normal.",
+        "wavelength (λ, nm): Cannot be observed because the specific wavelength of light causing refraction isn't distinguishable by eye in typical video.",
+        "critical_angle (θ_c, degrees): Cannot be observed as it's a calculated threshold angle for total internal reflection, not directly visible."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If the video shows light passing from air into a transparent material with visible bending, trigger: web_search(query='refractive index of [material name] at visible wavelengths').",
+        "Condition_2": "If the video shows a known interface (like water-air) with measurable bend, trigger: code_executor(formula='n1*sin(θi) = n2*sin(θr)').",
+        "Condition_3": "If the video shows dispersion (rainbow colors), trigger: web_search(query='dispersion relation for [material] Cauchy coefficients').",
+        "Condition_4": "If the video shows total internal reflection, trigger: code_executor(formula='θ_c = arcsin(n2/n1)')."
+      },
+      "Graph_Injection": "Add refractive_index_n1 and refractive_index_n2 as leaf nodes to Material nodes via has_property edge. Add incident_angle as leaf node to LightRay nodes via has_parameter edge. Add critical_angle as leaf node to Interface nodes via calculated_property edge.",
+      "Example_Question_Sketch": "Given a video showing light bending at a water-air interface with measured angles, first look up water's refractive index, then calculate the apparent depth of an object below the surface using Snell's law.",
+      "Relevant_Formulas": [
+        "Snell's Law: n₁ sin(θᵢ) = n₂ sin(θᵣ) where n=refractive index, θᵢ=incident angle, θᵣ=refracted angle",
+        "Critical angle: θ_c = arcsin(n₂/n₁) for n₁ > n₂",
+        "Apparent depth: d_apparent = d_actual × (n_observer/n_object)",
+        "Dispersion: n(λ) = A + B/λ² + C/λ⁴ (Cauchy's equation)"
+      ]
+    },
+    {
+      "Event_Category": "Optics/Shadow_Formation",
+      "Description": "A shadow forms when an opaque object blocks light from a source, creating a region of reduced illumination on a surface.",
+      "Visual_Triggers": [
+        "shadow appears",
+        "light blocked",
+        "dark area forms",
+        "object obstructs light",
+        "silhouette cast",
+        "contrast increases"
+      ],
+      "Latent_Properties": [
+        "light_source_distance (d_s, meters): distance from light source to object cannot be measured directly from 2D video frames without reference scale",
+        "object_opacity (τ, unitless): material's light transmission coefficient is not visually quantifiable without material identification",
+        "light_source_intensity (I_0, lumens or W/sr): absolute brightness of light source cannot be calibrated from pixel values alone",
+        "shadow_penumbra_width (w_p, meters): width of partial shadow region requires precise edge detection and scale calibration not available in standard video"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a shadow with sharp edges but no reference scale, trigger: web_search(query='typical [object material] opacity coefficient for visible light').",
+        "Condition_2": "If video shows shadow length changing over time, trigger: code_executor(formula='shadow_length = object_height * tan(sun_elevation_angle)').",
+        "Condition_3": "If video contains multiple light sources creating overlapping shadows, trigger: code_executor(formula='total_illumination = sum(I_i/d_i^2 * cos(θ_i)) for each source i').",
+        "Condition_4": "If video shows colored light source and colored shadow, trigger: web_image_search(query='[object type] spectral absorption characteristics') to identify filtering properties."
+      },
+      "Graph_Injection": "Add light_source_distance as a leaf node to LightSource nodes via has_distance edge. Add object_opacity as a leaf node to Object nodes via has_opacity edge. Add light_source_intensity as a leaf node to LightSource nodes via has_intensity edge. Add shadow_penumbra_width as a leaf node to ShadowRegion nodes via has_width edge.",
+      "Example_Question_Sketch": "Given a video showing a person's shadow length decreasing over 30 minutes, calculate the change in solar elevation angle using the person's height (obtained via web search for average human height) and two shadow measurements at different times.",
+      "Relevant_Formulas": [
+        "L = h * cot(θ) where L is shadow length, h is object height, θ is angle of light incidence",
+        "I_shadow = I_0 * (1 - τ) * (A_object/A_shadow) where I is intensity, τ is opacity, A is area",
+        "w_p = (d_object * d_source) / (d_source - d_object) * (R_source/R_object) for penumbra width with extended light source",
+        "E = I/d² * cos(α) for illuminance at surface, where E is lux, I is luminous intensity, d is distance, α is angle of incidence"
+      ]
+    },
+    {
+      "Event_Category": "Optics/Lens_Focusing",
+      "Description": "A convex lens converges parallel light rays to a single focal point, forming a sharp image when the object distance equals the focal length.",
+      "Visual_Triggers": [
+        "light converging",
+        "image sharpening",
+        "rays focusing",
+        "lens bending light",
+        "focal point visible",
+        "beam narrowing"
+      ],
+      "Latent_Properties": [
+        "focal_length (f, meters): Cannot be directly observed because it depends on lens curvature and refractive index, which are not visible in video frames.",
+        "object_distance (u, meters): Cannot be measured from video without knowing the absolute scale of the scene and camera position relative to lens.",
+        "image_distance (v, meters): Hidden as it requires knowing where the sharp image forms relative to lens, often off-camera or not explicitly marked.",
+        "refractive_index (n, unitless): Material property of lens not discernible from visual appearance alone.",
+        "lens_power (P, diopters): Derived from focal length; cannot be observed without knowing f first."
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a sharp image formed on a screen, trigger: code_executor(formula='1/f = 1/u + 1/v'). Use known u or v from scale estimation to compute f.",
+        "Condition_2": "If lens material is mentioned or visible but refractive index unknown, trigger: web_search(query='refractive index of [material] lens glass').",
+        "Condition_3": "If object size and image size are measurable but distances unknown, trigger: code_executor(formula='magnification = v/u = image_height/object_height') to relate ratios.",
+        "Condition_4": "If lens type is identified but focal length unspecified, trigger: web_image_search(query='[lens type] focal length chart') to find typical values."
+      },
+      "Graph_Injection": "Add focal_length (f) as a leaf node to Lens nodes via has_property edge. Add object_distance (u) and image_distance (v) as leaf nodes to Object and Image nodes respectively via located_at edge. Add refractive_index (n) as leaf node to Lens nodes via made_of edge.",
+      "Example_Question_Sketch": "Given a video where a lens focuses sunlight to burn a paper, use the measured object distance (Sun-lens) and the thin lens formula to compute the focal length, then determine the lens power in diopters.",
+      "Relevant_Formulas": [
+        "Thin lens formula: 1/f = 1/u + 1/v, where f is focal length, u is object distance, v is image distance.",
+        "Lensmaker's formula: 1/f = (n - 1)(1/R1 - 1/R2), where n is refractive index, R1 and R2 are radii of curvature.",
+        "Magnification: M = v/u = h_i/h_o, where h_i is image height, h_o is object height.",
+        "Lens power: P = 1/f (in meters), units diopters (D)."
+      ]
+    },
+    {
+      "Event_Category": "Wave_Acoustics/Sound_Propagation",
+      "Description": "Sound waves traveling through a medium, with their speed and attenuation determined by material properties and environmental conditions.",
+      "Visual_Triggers": [
+        "speaker vibrating",
+        "person shouting",
+        "glass vibrating",
+        "sound waves visible",
+        "microphone recording",
+        "echo occurring"
+      ],
+      "Latent_Properties": [
+        "sound_speed (v, m/s): cannot be observed directly as it requires knowledge of medium properties like density and bulk modulus",
+        "acoustic_impedance (Z, Pa·s/m): hidden property that depends on both density and sound speed, not visible in video",
+        "attenuation_coefficient (α, dB/m): requires material-specific absorption data not observable from visuals alone",
+        "frequency_content (f, Hz): while pitch might be audible, exact frequency spectrum requires spectral analysis",
+        "source_power (P, W): acoustic power output depends on source characteristics not fully visible"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows sound source and medium (air, water, solid), trigger: web_search(query='[medium] density bulk modulus sound speed').",
+        "Condition_2": "If video shows distance to observer and time delay between visual event and sound arrival, trigger: code_executor(formula='v = distance/time_delay').",
+        "Condition_3": "If video shows specific materials (glass, metal, foam) and mentions sound insulation/transmission, trigger: web_search(query='[material] acoustic impedance attenuation coefficient').",
+        "Condition_4": "If video shows multiple media interfaces (air-water, air-glass), trigger: code_executor(formula='R = (Z2-Z1)/(Z2+Z1) for reflection coefficient')."
+      },
+      "Graph_Injection": "Add sound_speed as a leaf node to Material nodes via has_property edge. Add acoustic_impedance as a leaf node to Material nodes via characterized_by edge. Add attenuation_coefficient as a leaf node to Medium nodes via exhibits edge. Add frequency_content as a leaf node to SoundSource nodes via emits edge.",
+      "Example_Question_Sketch": "Given a video showing a speaker vibrating underwater at 5m from a hydrophone, with a 0.0033s delay between light flash and sound detection, calculate the acoustic impedance of seawater and then determine what percentage of sound would reflect at a seawater-air interface.",
+      "Relevant_Formulas": [
+        "v = √(B/ρ) where v=sound speed, B=bulk modulus, ρ=density",
+        "Z = ρv where Z=acoustic impedance, ρ=density, v=sound speed",
+        "R = (Z₂-Z₁)/(Z₂+Z₁) where R=pressure reflection coefficient, Z=acoustic impedance",
+        "α = (20/δ)log₁₀(P₁/P₂) where α=attenuation coefficient (dB/m), δ=distance, P=pressure"
+      ]
+    },
+    {
+      "Event_Category": "Wave_Acoustics/Resonance",
+      "Description": "A system vibrates with maximum amplitude when driven at its natural frequency, transferring energy efficiently from source to resonator.",
+      "Visual_Triggers": [
+        "vibrating intensely",
+        "amplitude increasing",
+        "sympathetic vibration",
+        "glass breaking",
+        "structure shaking",
+        "tuning fork response"
+      ],
+      "Latent_Properties": [
+        "natural_frequency (f₀, Hz): intrinsic property of the resonator determined by its geometry and material, not directly measurable from visual amplitude",
+        "damping_coefficient (γ, s⁻¹): energy loss rate due to friction/air resistance, hidden as it affects decay rate but not peak amplitude",
+        "quality_factor (Q, dimensionless): ratio of stored to dissipated energy, requires knowledge of both f₀ and γ to compute",
+        "driving_frequency (f_d, Hz): frequency of external source, often unknown unless the source is specified or measured",
+        "resonance_amplitude (A_max, m): maximum displacement at resonance, depends on both driving force and system properties"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a vibrating object with increasing amplitude but no frequency information, trigger: web_search(query='natural frequency of [object material] [object shape]').",
+        "Condition_2": "If the object's material is identified but damping is unknown, trigger: web_search(query='damping coefficient of [material] acoustic resonance').",
+        "Condition_3": "If both natural frequency and damping coefficient are known from search, trigger: code_executor(formula='Q = f₀ / Δf where Δf = f₂ - f₁ at half-power points').",
+        "Condition_4": "If the driving source is visible but unlabeled, trigger: web_image_search(query='[source object] frequency specification') to identify typical operating frequencies."
+      },
+      "Graph_Injection": "Add natural_frequency as a leaf node to Object nodes via has_property edge. Add damping_coefficient as a leaf node to Material nodes via characterized_by edge. Add quality_factor as a leaf node to Event nodes via computed_from edge connecting to both natural_frequency and damping_coefficient nodes.",
+      "Example_Question_Sketch": "Given a video of a wine glass shattering when exposed to a speaker, first search for the glass material's damping coefficient, then compute the quality factor needed to determine if a 1000 Hz tone at 90 dB would cause resonance failure.",
+      "Relevant_Formulas": [
+        "f₀ = 1/(2π) * √(k/m) where k is stiffness (N/m) and m is mass (kg)",
+        "A(ω) = F₀/m / √((ω₀² - ω²)² + (γω)²) where ω = 2πf, F₀ is driving force amplitude",
+        "Q = f₀ / Δf where Δf is bandwidth at half-power points (A_max/√2)",
+        "γ = b/(2m) where b is damping constant (Ns/m)"
+      ]
+    },
+    {
+      "Event_Category": "Wave_Acoustics/Doppler_Effect",
+      "Description": "The change in frequency or wavelength of a wave in relation to an observer moving relative to the wave source.",
+      "Visual_Triggers": [
+        "moving towards sound source",
+        "moving away from sound source",
+        "vehicle passing by",
+        "siren approaching then receding",
+        "pitch change audible",
+        "relative motion between source and listener"
+      ],
+      "Latent_Properties": [
+        "source_velocity (v_s, m/s): cannot be directly observed because video shows only relative motion, not absolute speed of source",
+        "observer_velocity (v_o, m/s): cannot be directly observed because video shows only relative motion, not absolute speed of observer",
+        "original_frequency (f_0, Hz): cannot be directly observed because only perceived frequency is audible, not the source's intrinsic frequency",
+        "speed_of_sound (c, m/s): cannot be directly observed as it depends on air temperature and medium properties not visible in video",
+        "perceived_frequency (f', Hz): cannot be directly observed quantitatively from video; only qualitative pitch change is audible"
+      ],
+      "Actionable_Rules": {
+        "Condition_1": "If video shows a moving vehicle with siren and we know the vehicle type, trigger: web_search(query='typical siren frequency for [vehicle_type] police/ambulance/fire truck').",
+        "Condition_2": "If video shows ambient conditions (rain, snow, temperature indicators), trigger: web_search(query='speed of sound in air at [temperature] degrees Celsius').",
+        "Condition_3": "If we need to calculate perceived frequency given source/observer velocities, trigger: code_executor(formula='f_prime = f_0 * (c + v_o)/(c - v_s) for approaching, f_prime = f_0 * (c - v_o)/(c + v_s) for receding').",
+        "Condition_4": "If video shows distance markers or speed limit signs, trigger: code_executor(formula='v = distance/time from frame timestamps') to estimate velocities."
+      },
+      "Graph_Injection": "Add source_velocity as a leaf node to Sound_Source nodes via has_velocity edge. Add observer_velocity as a leaf node to Listener nodes via has_velocity edge. Add original_frequency as a leaf node to Sound_Source nodes via emits_frequency edge. Add speed_of_sound as a leaf node to Environment nodes via medium_property edge. Add perceived_frequency as a leaf node to Sound_Wave nodes via measured_frequency edge.",
+      "Example_Question_Sketch": "A police car with siren moving at 30 m/s approaches a stationary observer, then passes and recedes; given the siren's original frequency is 800 Hz and speed of sound is 340 m/s, calculate the perceived frequency ratio between approaching and receding phases using the Doppler formula.",
+      "Relevant_Formulas": [
+        "f' = f_0 * (c ± v_o)/(c ∓ v_s) where f' is perceived frequency, f_0 is source frequency, c is speed of sound, v_o is observer velocity (+ if moving toward source), v_s is source velocity (+ if moving toward observer)",
+        "c = 331.3 + 0.606 * T (m/s) where T is air temperature in °C",
+        "λ' = λ_0 * (c ∓ v_s)/(c ± v_o) where λ' is perceived wavelength, λ_0 is source wavelength",
+        "Δf = f_0 * (v_rel/c) for small relative velocities v_rel where Δf is frequency shift"
+      ]
+    }
+  ]
+}

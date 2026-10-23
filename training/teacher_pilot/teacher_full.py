@@ -1,9 +1,9 @@
-"""10/16 teacher forward-solve, full run (OmniAtlas style) on all f10 train QAs x K. Same as teacher_pilot (Gemini,
-whole clip as base64 video, real Serper + python tools, never sees the GT, scored by metrics_final) with the fixes from
-the pilot: (1) visible reasoning in a <reasoning> block every turn (pilot: 3/185 turns had a think block; a "<think>"
-prefill is ignored with video input), renamed to <think> at data build; (2) up to MAX_ROUNDS=8 rounds are generated (pilot: only 57% answered within 6), training
-keeps <= 6 rounds; (3) K samples per QA, GT filtering happens at data build time.
-Output: one JSON list (resumable), same record layout as teacher_pilot.
+"""Gemini teacher forward-solve (OmniAtlas style) on all train QAs x K. Same setup as teacher_pilot.py (Gemini, whole
+clip as base64 video, real Serper + python tools, never sees the GT, scored by metrics_final), plus: (1) visible
+reasoning in a <reasoning> block every turn (Gemini rarely writes a <think> block, and a "<think>" prefill is ignored
+with video input), renamed to <think> at data build; (2) up to MAX_ROUNDS=8 rounds are generated, training keeps
+<= 6 rounds; (3) K samples per QA, GT filtering happens at data build time (scripts/p1_gemini_conv.py).
+Output: one JSON list (resumable), same record layout as teacher_pilot.py.
 Usage (from the work dir $TRIPHYS_WORK): python fc/training/teacher_pilot/teacher_full.py OUT.json [K]"""
 import asyncio, json, logging, re, sys, time
 from collections import defaultdict
@@ -16,7 +16,7 @@ from teacher_pilot import (SYSTEM_PROMPT, build_user_prompt, parse_response, cal
 
 logger = logging.getLogger('teacher_full')
 CONCURRENCY, MAX_ROUNDS = 24, 8
-# Gemini will not write <think> in visible text (pilot 3/185, prefill ignored with video input) but does write a
+# Gemini will not write <think> in visible text (a prefill is ignored with video input) but does write a
 # <reasoning> block; it is renamed to <think> when the SFT data is built.
 TOOL_SPEC = tp.TOOL_SPEC.replace('<think>...</think>', '<reasoning>...</reasoning>').replace(
     'You have at most 6 turns in total, so the final answer must come by the 6th turn.',

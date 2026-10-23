@@ -1,5 +1,5 @@
-"""10/17 Gemini forward-solve trajectories (teacher_full.py, data/teacher_full/gemini_k4.json) -> native Qwen3.5 SFT
-samples, ONLY for train QAs that no self-sample solved (p1_ss + p1_ss2): Gemini adds 15 A + 16 B QAs there.
+"""Gemini forward-solve trajectories (teacher_full.py, data/teacher_full/gemini_k4.json) -> native Qwen3.5 SFT
+samples, ONLY for train QAs that no self-sample solved (p1_ss + p1_ss2); in the paper run this adds 15 A + 16 B QAs.
 Per turn: <reasoning> block -> <think>, JSON <tool_call>{"name","arguments"} -> native <function=..><parameter=..>.
 Keep: ACC >= .9, <= 6 rounds, >= 1 tool call, final <answer>, no web_search query that copies the question wording
 (token overlap with the question > .6). Up to --per_qa per QA, highest SCS first.

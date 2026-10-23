@@ -1,8 +1,7 @@
-"""10/17 Re-score ACC of self-sample shards (results/<tag>_r{0..3}/*_shard*.json) whose ACC < .9 with experiment_right
-metrics_final (429/5xx retry): the gpt-4o-mini judge was saturated during sampling ("Step1 extraction failed:
-'choices'"), which can turn a correct trajectory into a failure. Rows with ACC >= .9 are kept. Shards are rewritten in
-place (ACC_old keeps the first score); a copy of each directory is saved as <dir>_bak1017 first.
-10/18: reps r0..r7 (p1_ssA has 8), missing dirs skipped.
+"""Re-score ACC of self-sample shards (results/<tag>_r{0..7}/*_shard*.json; missing reps are skipped) whose ACC < .9
+with metrics_final (judge requests retried on 429/5xx): a saturated gpt-4o-mini judge during sampling ("Step1 extraction
+failed: 'choices'") can turn a correct trajectory into a failure. Rows with ACC >= .9 are kept. Shards are rewritten in
+place (ACC_old keeps the first score); a copy of each directory is saved as <dir>_bak first.
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p1_rescore_samples.py p1_ss p1_ss2"""
 from srvpaths import E, EVAL_LIB  # machine paths, see srvpaths.py
 import asyncio, glob, json, os, shutil, sys
@@ -39,8 +38,8 @@ async def main(tags):
             d = '%s/results/%s_r%d' % (E, tag, r)
             if not os.path.isdir(d):
                 continue
-            if not os.path.exists(d + '_bak1017'):
-                shutil.copytree(d, d + '_bak1017')
+            if not os.path.exists(d + '_bak'):
+                shutil.copytree(d, d + '_bak')
             n_re = n_up = 0
             for f in sorted(glob.glob(d + '/*_shard*.json')):
                 if 'serper_failures' in f:

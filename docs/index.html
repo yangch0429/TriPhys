@@ -308,8 +308,8 @@
     <span class="eyebrow" style="color:var(--green)">Method</span>
     <h2>TriPhys: one tool-integrated policy for all three worlds</h2>
     <p class="lead">
-      TriPhys trains a single policy that perceives, retrieves and reasons within one trajectory. It needs no teacher
-      trajectories and no task-specific routing: the backbone learns from its own verified successes, then from
+      TriPhys trains a single policy that perceives, retrieves and reasons within one trajectory. It needs no
+      task-specific routing: the backbone learns from verified successful trajectories, then from
       preference pairs over full trajectories.
     </p>
     <div class="steps reveal">
@@ -318,6 +318,7 @@
         <ul>
           <li>The backbone samples tool-integrated trajectories on the 300 training questions without seeing the reference.</li>
           <li>Trajectories are kept only if they pass answer verification: ACC ≥ 0.9, an answer in the last turn, at least one tool call, no failed retrieval.</li>
+          <li>Questions that no sample solves are filled with tool-using teacher trajectories that never see the reference.</li>
           <li>The final answer block is rewritten into a stepwise chain built only from values already in the trajectory.</li>
           <li>Tool returns are masked from the loss.</li>
         </ul>
@@ -363,7 +364,7 @@ python evaluation/aggregate.py results/qwen35_4b*.jsonl --out results/qwen35_4b_
 <span class="c"># train TriPhys (Stage I SFT -> Stage II DPO)</span>
 export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh && bash training/run_4b.sh</pre>
     </div>
-    <p class="note">Videos are not redistributed. The required EgoExo4D takes and Physics-aware-videos files are listed in <code>data/videos_mpr.txt</code> and <code>data/videos_kpr.txt</code>; see the README for download instructions.</p>
+    <p class="note">Videos are not redistributed. The required EgoExo4D takes and Physics-aware-videos files are listed in <code>data/videos_mpr.txt</code> and <code>data/videos_kpr.txt</code>; see the README for the expected directory layout.</p>
   </div>
 </section>
 
@@ -387,8 +388,7 @@ export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh && bash trainin
   <div class="wrap">
     <p>
       TriPhysBench builds on <a href="https://ego-exo4d-data.org/">EgoExo4D</a> and
-      <a href="https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos">BAAI-DataCube Physics-aware-videos</a>,
-      and adapts the event-graph question generation of <a href="https://arxiv.org/abs/2602.22897">OmniGAIA</a>.
+      <a href="https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos">BAAI-DataCube Physics-aware-videos</a>.
     </p>
     <p>Code: MIT · Annotations: CC BY-NC 4.0 · Videos remain under their original licenses.</p>
   </div>

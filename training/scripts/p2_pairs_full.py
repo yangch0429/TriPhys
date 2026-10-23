@@ -1,18 +1,19 @@
-"""10/18 14:50 Phase2 pairs, full-trajectory version (user chose "改全轨迹配对" after the prefix-branch pilot gave pairs on
-only 4/79 QAs, all B: chosen/rejected are almost always decided before the branch point).
+"""Stage-II preference pairs, full-trajectory version (the DPO data of run_4b.sh): chosen and rejected are whole
+trajectories, because whether a rollout ends correct or wrong is mostly decided before the branch point.
 Rollouts = p2_online.py rows (comb1, T .7, eval_n1 loop; full trajectory = prefix + cont).
   chosen    1) comb1's own rollout on the QA: answered, ACC >= .9, used_ref, Flash SCS >= .75 (on-policy, preferred)
             2) else a comb1 SFT trajectory of the QA (data/p1/rwf_comb1.json, data/p1/afill_rwf.json: GT-verified base
                self-samples with rewritten answer blocks; system / user replaced by the eval prompt), best SCS_rw first
   rejected  comb1 rollout on the same QA with a wrong answer (ACC < .5) or no <answer>; no Serper failure
   per QA <= --per_qa pairs; distinct rejected rollouts, alternating wrong / no_answer; chosen cycled.
-Loss as before (train_dpo_p2: length-normalised DPO, --mask_common_prefix scores from the first differing token,
+Loss (train_dpo_p2: length-normalised DPO, --mask_common_prefix scores from the first differing token,
 init + frozen ref = comb1, A/B --class_balance). 'tokens' = assistant tokens after the shared system/user prompt.
 Usage (from the work dir $TRIPHYS_WORK): python scripts/p2_pairs_full.py --inp 'results/p2_on/w_*[0-9].json' --out data/p2/dpo_p2_full1.json"""
-from srvpaths import BASE_MODEL, SCRIPTS  # machine paths, see srvpaths.py
+from srvpaths import BASE_MODEL, SCRIPTS, EVAL_LIB  # machine paths, see srvpaths.py
 import argparse, asyncio, glob, json, os, sys
 from collections import Counter, defaultdict
 sys.path.insert(0, SCRIPTS)
+sys.path.insert(0, EVAL_LIB)
 from prompts import SYSTEM_PROMPT, build_user_prompt
 import p2_pairs as P2
 
