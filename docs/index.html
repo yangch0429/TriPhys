@@ -350,7 +350,7 @@ python evaluation/rescore.py   results/qwen35_4b.jsonl
 python evaluation/aggregate.py results/qwen35_4b*.jsonl --out results/qwen35_4b_summary.json
 
 <span class="c"># train TriPhys (Stage I SFT -> Stage II DPO)</span>
-export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh && bash training/run_4b.sh</pre>
+export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh && bash training/run.sh</pre>
     </div>
     <p class="note">Videos are not redistributed. The required EgoExo4D takes and Physics-aware-videos files are listed in <code>data/videos_mpr.txt</code> and <code>data/videos_kpr.txt</code>; see the README for the expected directory layout.</p>
   </div>

@@ -4,7 +4,7 @@
 #  1) uncovered = MPR train QAs with no sample in the Stage-I data (data/p1/rwf_comb1.json)
 #  2) correct self-samples of those QAs from the Stage-I sampling rounds (p1_ss, p1_ss2) -> afill_old -> answer-block
 #     rewrite, 6 tries
-#  3) rftrwf_bal_1e4 samples the uncovered QAs 8 more times (T 0.7, eval_n1_sample), 8 reps x 8 shards on 16 slots
+#  3) rftrwf_bal_1e4 samples the uncovered QAs 8 more times (T 0.7, eval_n1_sample), 8 reps x 8 shards, SLOTS per GPU
 #  4) ACC re-score of the new samples, afill_new (same filter, <= 3 per QA) -> rewrite 6 tries
 #  5) afill_rwf = old + new, <= 3 per QA by SCS (after rewrite)
 # Usage: bash training/p1_afill_data.sh      (needs results/p1_ss*, data/p1/rwf_comb1.json, rftrwf_bal_1e4)
@@ -33,7 +33,7 @@ $PY scripts/p1_rft_build.py --name afill_old --per_qa 3 --tags p1_ss,p1_ss2 --on
 
 slot() {
   local j=$1
-  for k in $(seq $j 16 63); do
+  for k in $(seq $j $NS 63); do
     r=$((k / 8)); i=$((k % 8))
     mkdir -p results/p1_ssA_r$r
     GEN_TEMP=0.7 CUDA_VISIBLE_DEVICES=$((j % 8)) timeout 5h $PY fc/training/n1/eval_n1_sample.py --model_path $M \
@@ -43,7 +43,8 @@ slot() {
     step "sample r$r s$i exit $?"
   done
 }
-for j in $(seq 0 15); do slot $j & done
+NS=$((8 * ${SLOTS:-2}))
+for j in $(seq 0 $((NS - 1))); do slot $j & done
 wait
 step "SAMPLING DONE $(ls results/p1_ssA_r*/*_shard*.json | wc -l) files"
 $PY scripts/p1_rescore_samples.py p1_ssA > logs/p1_afill_rescore.log 2>&1

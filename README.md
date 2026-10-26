@@ -143,7 +143,7 @@ TriPhys/
 │   ├── n1/              # tool-loop evaluation and sampling of trained models, LoRA SFT
 │   ├── scripts/         # Stage I data (p1_*), Stage II rollouts, pairs and DPO (p2_*), pipeline scripts
 │   ├── teacher_pilot/   # tool-using Gemini teacher that never sees the reference answer
-│   └── run_4b.sh        # the full Qwen3.5-4B pipeline, step by step
+│   └── run.sh           # the full pipeline for one backbone, step by step
 └── docs/            # project page (GitHub Pages)
 ```
 
@@ -186,11 +186,11 @@ Every model gets the same system prompt and solves each question in a native too
 ### 4. Train TriPhys
 
 ```bash
-export TRIPHYS_WORK=/path/to/work && bash training/setup_work.sh
-bash training/run_4b.sh        # Stage I and Stage II for Qwen3.5-4B (8 × 80 GB GPUs); runs in $TRIPHYS_WORK
+export TRIPHYS_WORK=/path/to/work_4b && bash training/setup_work.sh
+BASE_MODEL=Qwen/Qwen3.5-4B bash training/run.sh    # Stage I and Stage II (8 × 80 GB GPUs); runs in $TRIPHYS_WORK
 ```
 
-`setup_work.sh` creates the work directory (`scripts` → `training/scripts`, `fc/training` → `training`, the released split under `data/f10/`). Base models default to the Hugging Face ids (`BASE_MODEL=Qwen/Qwen3.5-4B`, `B9=Qwen/Qwen3.5-9B`, `B27=Qwen/Qwen3.6-27B`); a local directory can be set instead. "A" / "B" in the code mean MPR / KPR.
+`setup_work.sh` creates the work directory (`scripts` → `training/scripts`, `fc/training` → `training`, the released split under `data/f10/`). `BASE_MODEL` is `Qwen/Qwen3.5-4B`, `Qwen/Qwen3.5-9B` or `Qwen/Qwen3.6-27B` (or a local directory); use one work directory per backbone. For Qwen3.6-27B, `run.sh` trains with the model-parallel variants (`n1/train_sft_n1_mp.py`, `scripts/train_dpo_p2_mp.py`) and runs one sampling process per GPU. "A" / "B" in the code mean MPR / KPR.
 
 **Stage I: full-trajectory SFT.**
 
@@ -205,11 +205,9 @@ bash training/run_4b.sh        # Stage I and Stage II for Qwen3.5-4B (8 × 80 GB
 **Stage II: full-trajectory DPO.**
 
 8. `p2_worker.sh` / `p2_online.py`: on-policy rollouts of the Stage I model on the training questions (T 0.7).
-9. `p2_pairs_full.py`: at most two pairs per question. Chosen: a correct rollout of the Stage I model (ACC ≥ 0.9, SCS ≥ 0.75), otherwise a Stage I trajectory of the same question. Rejected: a wrong (ACC < 0.5) or unanswered rollout.
+9. `p2_pairs_full.py`: at most two pairs per question. Chosen: a correct rollout of the Stage I model (answered, ACC ≥ 0.9, reference value used, SCS ≥ 0.75), otherwise a Stage I trajectory of the same question. Rejected: a wrong (ACC < 0.5) or unanswered rollout.
 10. `train_dpo_p2.py`: the Stage I model is merged and serves as both the initialization of a new LoRA adapter and the frozen reference; length-normalized DPO from the first token where chosen and rejected differ (β 0.1, lr 5e-6, 2 epochs).
 11. `p2_reeval_n1.sh`: evaluation on the 110 test questions with `n1/eval_n1.py` (sharded over GPUs, then merged).
-
-Qwen3.5-9B and Qwen3.6-27B are trained on the same Stage I trajectories and DPO pairs with `scripts/p9_chain.sh` and `scripts/p27_chain.sh`. Training data are model samples scored by API judges and web search results change over time, so a rerun produces data of the same kind rather than identical rows.
 
 ## 🗂️ Data format
 

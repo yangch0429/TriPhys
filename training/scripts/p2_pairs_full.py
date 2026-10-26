@@ -1,4 +1,4 @@
-"""Stage-II preference pairs, full-trajectory version (the DPO data of run_4b.sh): chosen and rejected are whole
+"""Stage-II preference pairs, full-trajectory version (the DPO data of run.sh): chosen and rejected are whole
 trajectories, because whether a rollout ends correct or wrong is mostly decided before the branch point.
 Rollouts = p2_online.py rows (comb1, T .7, eval_n1 loop; full trajectory = prefix + cont).
   chosen    1) comb1's own rollout on the QA: answered, ACC >= .9, used_ref, Flash SCS >= .75 (on-policy, preferred)

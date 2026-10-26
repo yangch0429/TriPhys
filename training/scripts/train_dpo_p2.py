@@ -20,7 +20,7 @@ Input pipeline:
   - one background thread prepares (_process_sample) the next --prefetch pairs while the GPU runs the current one;
     all tokenizer / processor calls stay in that single thread (fast tokenizers are not thread-safe)
 The merged Stage-I model (+ processor) is saved to --merged_dir; it is the --base_model of the DPO adapter in eval_n1.py.
-Usage (from the work dir $TRIPHYS_WORK; see training/run_4b.sh):
+Usage (from the work dir $TRIPHYS_WORK; see training/run.sh):
   torchrun --nproc_per_node=8 scripts/train_dpo_p2.py --sft_ckpt outputs/phase1/comb1_1e4/final_model
       --merged_dir outputs/phase1/comb1_1e4/merged --data data/p2/dpo_p2_full1.json --output outputs/phase2/p2_full1
       --max_length 16384 --epochs 2 --lr 5e-6 --beta 0.1 --sft_alpha 0 --grad_accum 2 --mask_common_prefix
@@ -110,7 +110,7 @@ def main():
     ap.add_argument('--base_model', default=MODEL_PATH)
     ap.add_argument('--max_length', type=int, default=16384)
     ap.add_argument('--epochs', type=int, default=2)
-    ap.add_argument('--lr', type=float, default=1e-5)
+    ap.add_argument('--lr', type=float, default=5e-6)
     ap.add_argument('--beta', type=float, default=0.1)
     ap.add_argument('--sft_alpha', type=float, default=0.0)
     ap.add_argument('--lora_r', type=int, default=32)

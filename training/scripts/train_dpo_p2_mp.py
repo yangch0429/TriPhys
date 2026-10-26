@@ -2,7 +2,7 @@
 """Model-parallel variant of train_dpo_p2.py for Qwen3.6-27B: rank r holds its replica split over GPUs
 [r*G, (r+1)*G) (G = env GPUS_PER_RANK, device_map auto); the LoRA gradients are all-reduced as one flat tensor on
 the rank's first GPU. Loss, data and optimizer are those of train_dpo_p2.py; set --grad_accum so that
-ranks x accum = 16 (the effective batch of the 4B / 9B runs).
+ranks x accum = 16 (effective batch of 16 pairs, as in train_dpo_p2.py).
 
 DPO (Stage II) on top of the Stage-I model (base + Stage-I LoRA), video + multi-turn tool trajectories in the Qwen3.5
 native tool format (VideoSFTDataset of train_sft_n1.py: chat template with tools=, frame subsampling, label mask).
@@ -25,7 +25,7 @@ Input pipeline:
   - one background thread prepares (_process_sample) the next --prefetch pairs while the GPU runs the current one;
     all tokenizer / processor calls stay in that single thread (fast tokenizers are not thread-safe)
 The merged Stage-I model (+ processor) is saved to --merged_dir; it is the --base_model of the DPO adapter in eval_n1.py.
-Usage (from the work dir $TRIPHYS_WORK; see training/scripts/p27_chain.sh):
+Usage (from the work dir $TRIPHYS_WORK; see training/run.sh, MP=1):
   GPUS_PER_RANK=4 torchrun --nproc_per_node=2 scripts/train_dpo_p2_mp.py --base_model Qwen/Qwen3.6-27B
       --sft_ckpt SFT/final_model --merged_dir SFT/merged --data data/p2/dpo_p2_full1.json --output OUT
       --max_length 16384 --epochs 2 --lr 5e-6 --beta 0.1 --sft_alpha 0 --grad_accum 8 --mask_common_prefix
@@ -139,7 +139,7 @@ def main():
     ap.add_argument('--base_model', default=MODEL_PATH)
     ap.add_argument('--max_length', type=int, default=16384)
     ap.add_argument('--epochs', type=int, default=2)
-    ap.add_argument('--lr', type=float, default=1e-5)
+    ap.add_argument('--lr', type=float, default=5e-6)
     ap.add_argument('--beta', type=float, default=0.1)
     ap.add_argument('--sft_alpha', type=float, default=0.0)
     ap.add_argument('--lora_r', type=int, default=32)

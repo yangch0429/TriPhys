@@ -14,8 +14,8 @@ in the Qwen3.5 native tool format.
 5. --think_w          loss weight of tokens inside <think>...</think> of assistant turns (default 1.0)
 LoRA on the language-model projections; LabelOnlyTrainer computes the (weighted) loss on labelled positions only.
 
-Usage (from the work dir $TRIPHYS_WORK; see training/scripts/p27_chain.sh):
-  python fc/training/n1/train_sft_n1_mp.py --data data/p1/rwf_comb1.json --output OUT_DIR --base_model Qwen/Qwen3.6-27B
+Usage (from the work dir $TRIPHYS_WORK; see training/scripts/p1_rft_chain.sh, MP=1):
+  python fc/training/n1/train_sft_n1_mp.py --data data/p1/DATA.json --output OUT_DIR --base_model Qwen/Qwen3.6-27B
       --epochs 3 --lr 1e-4 --lora_r 32 --max_length 16384 --grad_accum 16
 """
 
