@@ -241,6 +241,7 @@ BASE_MODEL=Qwen/Qwen3.5-4B bash training/run.sh    # Stage I and Stage II (8 × 
 }
 ```
 
+
 ## 🙏 Acknowledgements
 
 TriPhysBench builds on [EgoExo4D](https://ego-exo4d-data.org/) and [BAAI-DataCube Physics-aware-videos](https://huggingface.co/datasets/BAAI-DataCube/Physics-aware-videos). We thank their authors.
