@@ -1,4 +1,4 @@
-"""两步LLM评测：Step 1提取，Step 2调用规则评分（带单位转换）"""
+"""Two-step LLM evaluation: Step 1 extraction, Step 2 rule-based scoring (with unit conversion)"""
 import httpx
 import json
 import logging
@@ -13,31 +13,31 @@ JUDGE_API_URL = os.environ.get("ACC_JUDGE_BASE", "https://openrouter.ai/api/v1")
 JUDGE_API_KEY = os.environ.get("ACC_JUDGE_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
 JUDGE_MODEL = os.environ.get("ACC_JUDGE_MODEL", "openai/gpt-4o-mini")
 
-# 单位转换字典（转换为SI单位）
+# unit conversion table (to SI units)
 UNIT_CONVERSIONS = {
-    # 长度
+    # length
     'cm': 0.01, 'mm': 0.001, 'km': 1000, 'm': 1,
-    # 质量
+    # mass
     'g': 0.001, 'kg': 1, 'mg': 0.000001,
-    # 能量
+    # energy
     'J': 1, 'kJ': 1000, 'mJ': 0.001,
-    # 力
+    # force
     'N': 1, 'kN': 1000,
-    # 时间
+    # time
     's': 1, 'ms': 0.001, 'min': 60, 'h': 3600,
-    # 速度
+    # speed
     'm/s': 1, 'km/h': 0.277778, 'cm/s': 0.01,
 }
 
 
 def normalize_value_with_unit(text: str) -> tuple:
-    """从文本中提取数值和单位，并转换为SI单位
-    返回: (si_value, original_unit)
+    """Extract a number and its unit from text and convert it to SI units
+    Returns: (si_value, original_unit)
     """
     if not text:
         return (None, None)
 
-    # 匹配数值和单位，如 "4.25 J", "128 cm", "1.5 m/s"
+    # match a number and a unit, e.g. "4.25 J", "128 cm", "1.5 m/s"
     patterns = [
         r'([0-9]+\.?[0-9]*)\s*(m/s|km/h|cm/s|kJ|mJ|kN|cm|mm|km|mg|kg|ms|min|J|N|m|g|s|h)',
         r'([0-9]+\.?[0-9]*)\s*([a-zA-Z]+)',
@@ -49,14 +49,14 @@ def normalize_value_with_unit(text: str) -> tuple:
             value = float(match.group(1))
             unit = match.group(2)
 
-            # 转换为SI单位
+            # convert to SI units
             if unit in UNIT_CONVERSIONS:
                 si_value = value * UNIT_CONVERSIONS[unit]
                 return (si_value, unit)
             else:
                 return (value, unit)
 
-    # 如果没有单位，尝试提取数值
+    # no unit: try to extract a bare number
     match = re.search(r'([0-9]+\.?[0-9]*)', text)
     if match:
         return (float(match.group(1)), None)
@@ -64,7 +64,7 @@ def normalize_value_with_unit(text: str) -> tuple:
     return (None, None)
 
 
-# 区间解析：数值可带 e 记数法；以 "to" 连接时允许负号（"-" 连接时 "-" 是分隔符）
+# range parsing: numbers may use e-notation; negative signs are allowed with "to" (with "-", "-" is the separator)
 _RNUM = r'(?<![\w.])([0-9]+\.?[0-9]*(?:[eE][-+]?[0-9]+)?)'
 _RSNUM = r'(?<![\w.])(-?[0-9]+\.?[0-9]*(?:[eE][-+]?[0-9]+)?)'
 _RUNIT = r'(?!(?:to|and)\b)([a-zA-Z°%][a-zA-Z/°%²³]*)'
@@ -72,7 +72,7 @@ _RKNOWN = r'(m/s|km/h|cm/s|kJ|mJ|kN|cm|mm|km|mg|kg|ms|min|J|N|m|g|s|h)'
 _RSEP = r'\s*(?:[-~]|\bto\b)\s*'
 _SUP = str.maketrans('⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺', '0123456789-+')
 _RANGE_PATTERNS = [
-    # (优先级, 正则, 类型)；同一位置先取带单位的写法
+    # (priority, regex, kind); at the same position the form with units wins
     (0, _RNUM + _RSEP + _RNUM + r'\s*' + _RKNOWN, 'unit'),                         # X - Y J
     (0, _RSNUM + r'\s+to\s+' + _RSNUM + r'\s*' + _RKNOWN, 'unit'),                 # -0.3 to 0.6 m/s
     (0, _RNUM + r'\s*' + _RUNIT + _RSEP + _RNUM + r'\s*' + _RUNIT, 'both'),         # 440.64 J to 609.12 J
@@ -94,7 +94,7 @@ def _range_from_match(m, kind):
     if kind == 'between':
         u1, u2 = u1 or u2, u2 or u1
         return (v1 * UNIT_CONVERSIONS.get(u1, 1), v2 * UNIT_CONVERSIONS.get(u2, 1), u2)
-    if u1 in UNIT_CONVERSIONS and u2 in UNIT_CONVERSIONS:   # 两端单位分别换算
+    if u1 in UNIT_CONVERSIONS and u2 in UNIT_CONVERSIONS:   # convert each endpoint by its own unit
         return (v1 * UNIT_CONVERSIONS[u1], v2 * UNIT_CONVERSIONS[u2], u2)
     if u1 == u2:
         return (v1, v2, u2)
@@ -102,14 +102,14 @@ def _range_from_match(m, kind):
 
 
 def normalize_range_with_unit(text: str) -> tuple:
-    """从文本中提取区间并转换为SI单位
-    区间两端都带单位（"440.64 J to 609.12 J"、"6.12 J - 6.60 J"）、"X to Y unit"、"between X and Y"、
-    负下界（"-0.304 to 0.590"）与 e 记数法都按区间解析。
-    取文本中最早出现的区间；同一位置优先带单位的写法"""
+    """Extract a range from text and convert it to SI units
+    Ranges with units on both ends ("440.64 J to 609.12 J", "6.12 J - 6.60 J"), "X to Y unit", "between X and Y",
+    negative lower bounds ("-0.304 to 0.590") and e-notation are all parsed as ranges.
+    The earliest range in the text is taken; at the same position the form with units wins"""
     if not text:
         return (None, None, None)
     text_clean = text.replace('–', '-').replace('—', '-').replace('−', '-')
-    text_clean = re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', text_clean)  # 千分位逗号
+    text_clean = re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', text_clean)  # thousands separators
     text_clean = re.sub(r'([0-9]+\.?[0-9]*)\s*[x×*·]\s*10(?:\s*\^\s*(?:\(\s*([-+]?[0-9]+)\s*\)|([-+]?[0-9]+))|([⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))',
                         lambda m: m.group(1) + 'e' + (m.group(2) or m.group(3) or m.group(4).translate(_SUP)), text_clean)  # 8.9 x 10^-6
     best = None
@@ -129,7 +129,7 @@ async def _extract_once(
     question_type: str,
     raw_response: str
 ) -> dict:
-    """Step 1: 从raw_response提取答案和推理链（不提供GT，避免污染）"""
+    """Step 1: extract the answer and reasoning chain from raw_response (no GT given, to avoid contamination)"""
 
     prompt = f"""Extract answer and reasoning from physics response.
 
@@ -178,7 +178,7 @@ Output JSON only (no markdown):
 
         logger.info(f"  [Step1-Extract] Response: {content_text[:150]}")
 
-        # 解析JSON
+        # parse JSON
         json_text = content_text.strip()
         if json_text.startswith('```'):
             s = json_text.find('{')
@@ -199,10 +199,10 @@ Output JSON only (no markdown):
         }
 
 
-# ==================== Step 2: 规则评分函数（带单位转换）====================
+# ==================== Step 2: rule-based scoring functions (with unit conversion) ====================
 
 def _acc_type_a(pred: str, gt: str) -> float:
-    """TYPE-A: 单数值答案，连续衰减评分（带单位转换）"""
+    """TYPE-A: single numerical answer, continuous decay scoring (with unit conversion)"""
     pred_si, pred_unit = normalize_value_with_unit(pred)
     gt_si, gt_unit = normalize_value_with_unit(gt)
 
@@ -220,14 +220,14 @@ def _acc_type_a(pred: str, gt: str) -> float:
 
 
 def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
-    """TYPE-B: 区间答案，支持单值和区间两种回答（带单位转换）"""
+    """TYPE-B: range answer; both single-value and range responses are supported (with unit conversion)"""
 
-    # 解析GT区间（带单位转换）
+    # parse the GT range (with unit conversion)
     if gt_range and len(gt_range) == 2:
-        # gt_range已经是数值，检查gt文本中的单位
+        # gt_range is already numeric; check the unit in the gt text
         gt_si_min, gt_si_max, gt_unit = normalize_range_with_unit(gt)
         if gt_si_min is None:
-            # 如果没有提取到，使用提供的gt_range
+            # nothing extracted: use the given gt_range
             gt_lo, gt_hi = float(gt_range[0]), float(gt_range[1])
         else:
             gt_lo, gt_hi = gt_si_min, gt_si_max
@@ -237,22 +237,22 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
             return 0.0
         gt_lo, gt_hi = gt_si_min, gt_si_max
 
-    # 尝试提取预测区间（带单位转换）
+    # try to extract a predicted range (with unit conversion)
     pred_si_min, pred_si_max, pred_unit = normalize_range_with_unit(pred)
 
     if pred_si_min is not None and pred_si_max is not None:
-        # 情况1：模型回答区间
+        # case 1: the model answers with a range
         pred_lo, pred_hi = pred_si_min, pred_si_max
         # a range answer lying entirely inside the GT range scores 1.0; partial overlap keeps 0.5*IoU + 0.5*EQS
         if min(gt_lo, gt_hi) <= min(pred_lo, pred_hi) and max(pred_lo, pred_hi) <= max(gt_lo, gt_hi):
             return 1.0
 
-        # 计算IoU
+        # compute IoU
         intersection = max(0, min(pred_hi, gt_hi) - max(pred_lo, gt_lo))
         union = max(pred_hi, gt_hi) - min(pred_lo, gt_lo)
         iou = intersection / union if union > 0 else 0.0
 
-        # 计算EQS（中心校准分）
+        # compute EQS (center-calibrated score)
         pred_center = (pred_lo + pred_hi) / 2
         gt_center = (gt_lo + gt_hi) / 2
         gt_width = gt_hi - gt_lo
@@ -261,7 +261,7 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
         return 0.5 * iou + 0.5 * eqs
 
     else:
-        # 情况2：模型回答单值（带单位转换）
+        # case 2: the model answers with a single value (with unit conversion)
         pred_si, pred_unit = normalize_value_with_unit(pred)
         if pred_si is None:
             return 0.0
@@ -269,10 +269,10 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
         gt_width = gt_hi - gt_lo
 
         if gt_lo <= pred_si <= gt_hi:
-            # 单值在区间内：满分
+            # single value inside the range: full score
             return 1.0
         else:
-            # 单值在区间外：使用EQS距离衰减
+            # single value outside the range: EQS distance decay
             if pred_si < gt_lo:
                 lower_error = (gt_lo - pred_si) / gt_width
                 upper_error = (gt_hi - pred_si) / gt_width
@@ -287,7 +287,7 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
 
 
 def _acc_type_c(pred: str, gt: str) -> float:
-    """TYPE-C: Yes/No答案"""
+    """TYPE-C: Yes/No answer"""
     pred_clean = pred.strip().lower()
     gt_clean = gt.strip().lower()
 
@@ -302,14 +302,14 @@ def _acc_type_c(pred: str, gt: str) -> float:
 
 
 async def _acc_type_d_async(pred: str, gt: str, question: str) -> float:
-    """TYPE-D: 比较答案（简单匹配）"""
+    """TYPE-D: comparison answer (simple matching)"""
     pred_clean = pred.strip().lower()
     gt_clean = gt.strip().lower()
 
     if pred_clean == gt_clean:
         return 1.0
 
-    # 简单的比较符号匹配
+    # simple comparison-direction matching
     if ('>' in pred_clean and '>' in gt_clean) or \
        ('<' in pred_clean and '<' in gt_clean) or \
        ('equal' in pred_clean and 'equal' in gt_clean):
@@ -327,12 +327,12 @@ async def llm_evaluate_raw_response_two_step(
     answer_range = None
 ) -> dict:
     """
-    两步评测主函数
-    Step 1: LLM提取答案和推理链（不提供GT）
-    Step 2: 调用规则评分函数（带单位转换）
+    Main two-step evaluation function
+    Step 1: the LLM extracts the answer and reasoning chain (no GT given)
+    Step 2: rule-based scoring (with unit conversion)
     """
 
-    # Step 1: 提取（不提供GT）
+    # Step 1: extraction (no GT given)
     extraction = await llm_extract_from_raw_response(
         question=question,
         question_type=question_type,
@@ -342,7 +342,7 @@ async def llm_evaluate_raw_response_two_step(
     extracted_answer = extraction.get('extracted_answer')
     extracted_reasoning = extraction.get('extracted_reasoning', '')
 
-    # 如果提取失败，继续评估raw_response（fallback逻辑）
+    # extraction failed: keep evaluating raw_response (fallback)
     if not extracted_answer or extraction.get('is_incomplete'):
         logger.warning(f"  [Two-Step] Extraction failed, will use raw_response for evaluation")
         pred_text = raw_response
@@ -351,7 +351,7 @@ async def llm_evaluate_raw_response_two_step(
         pred_text = extracted_answer
         reasoning_text = extracted_reasoning
 
-    # Step 2: 调用规则评分函数（带单位转换）
+    # Step 2: rule-based scoring (with unit conversion)
     try:
         if question_type == 'TYPE_A':
             acc_score = _acc_type_a(pred_text, ground_truth)
@@ -368,13 +368,13 @@ async def llm_evaluate_raw_response_two_step(
         logger.error(f"ACC calculation failed: {e}")
         acc_score = 0.0
 
-    # SCS评分：直接调用 metrics_final 的LLM评分函数
+    # SCS: call the LLM scoring function of metrics_final directly
     scs_details = {'S_obs': 0.0, 'S_formula': 0.0, 'S_derive': 0.0, 'S_conclude': 0.0}
     scs_score = 0.0
 
     if reasoning_text and annotated_solution:
         try:
-            # 导入并调用SCS评分函数
+            # import and call the SCS scoring function
             from .metrics_final import _llm_judge_reasoning
             scs_result = await _llm_judge_reasoning(reasoning_text, annotated_solution)
             if scs_result:

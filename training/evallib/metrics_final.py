@@ -1,10 +1,10 @@
 """
-评测指标计算模块：ACC, SCS, TUA, OGS
-支持混合评分：规则评分 + LLM-Judge评分
+Evaluation metrics: ACC, SCS, TUA, OGS
+Hybrid scoring: rule-based scoring + LLM-judge scoring
 
-1. TYPE_B支持单值处理（单值在区间内得1.0，区间外用EQS衰减）
-2. TYPE_D：GT含数值时由ACC judge判断（方向50% + 数值50%）
-3. SCS由SCS judge（DeepSeek-V4-Flash）评估4维度
+1. TYPE_B accepts single values (1.0 inside the range, EQS decay outside)
+2. TYPE_D: when the GT contains a number, scored by the ACC judge (direction 50% + value 50%)
+3. SCS is scored on 4 dimensions by the SCS judge (DeepSeek-V4-Flash)
 
 Endpoints, models and keys are read from the environment (.env.example):
   ACC judge  ACC_JUDGE_BASE / ACC_JUDGE_MODEL (gpt-4o-mini) / ACC_JUDGE_API_KEY or OPENROUTER_API_KEY
@@ -50,8 +50,8 @@ SCS_EXTRA = {"thinking": {"type": "disabled"}}
 
 async def calculate_acc_async(results: List[Dict]) -> float:
     """
-    计算答案正确性（ACC）- 异步版本
-    支持TYPE-A/B/C/D四种题型
+    Answer correctness (ACC), async version
+    Supports the four answer types TYPE-A/B/C/D
     """
     if not results:
         return 0.0
@@ -66,8 +66,8 @@ async def calculate_acc_async(results: List[Dict]) -> float:
         gt = result.get('ground_truth', '')
         question = result.get('question', '')
 
-        # 如果prediction为None或空，直接记0分
-        # 如果prediction为None或空，检查是否需要LLM评测
+        # prediction is None or empty: score 0
+        # prediction is None or empty: check whether LLM evaluation is needed
         if pred is None or pred == '':
             if result.get('needs_llm_eval'):
                 try:
@@ -105,13 +105,13 @@ async def calculate_acc_async(results: List[Dict]) -> float:
 
 
 def calculate_acc(results: List[Dict]) -> float:
-    """同步wrapper：calculate_acc_async 的同步版本"""
+    """Synchronous wrapper of calculate_acc_async"""
     loop = asyncio.get_event_loop()
     return loop.run_until_complete(calculate_acc_async(results))
 
 
 def _acc_type_a(pred: str, gt: str) -> float:
-    """TYPE-A: 单数值答案，连续衰减评分（带单位转换）"""
+    """TYPE-A: single numerical answer, continuous decay scoring (with unit conversion)"""
     pred_si, _ = normalize_value_with_unit(pred)
     gt_si, _ = normalize_value_with_unit(gt)
 
@@ -129,8 +129,8 @@ def _acc_type_a(pred: str, gt: str) -> float:
 
 
 def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
-    """TYPE-B: 区间答案，支持单值和区间两种回答（带单位转换）"""
-    # 解析GT区间（带单位转换）
+    """TYPE-B: range answer; both single-value and range responses are supported (with unit conversion)"""
+    # parse the GT range (with unit conversion)
     if gt_range and len(gt_range) == 2:
         gt_si_min, gt_si_max, _ = normalize_range_with_unit(gt)
         if gt_si_min is None:
@@ -143,23 +143,23 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
             return 0.0
         gt_lo, gt_hi = gt_si_min, gt_si_max
 
-    # 尝试提取预测区间（带单位转换）
+    # try to extract a predicted range (with unit conversion)
     pred_si_min, pred_si_max, _ = normalize_range_with_unit(pred)
     pred_range = (pred_si_min, pred_si_max) if pred_si_min is not None else None
 
     if pred_range:
-        # 情况1：模型回答区间
+        # case 1: the model answers with a range
         pred_lo, pred_hi = pred_range
         # a range answer lying entirely inside the GT range scores 1.0; partial overlap keeps 0.5*IoU + 0.5*EQS
         if min(gt_lo, gt_hi) <= min(pred_lo, pred_hi) and max(pred_lo, pred_hi) <= max(gt_lo, gt_hi):
             return 1.0
 
-        # 计算IoU
+        # compute IoU
         intersection = max(0, min(pred_hi, gt_hi) - max(pred_lo, gt_lo))
         union = max(pred_hi, gt_hi) - min(pred_lo, gt_lo)
         iou = intersection / union if union > 0 else 0.0
 
-        # 计算EQS（中心校准分）
+        # compute EQS (center-calibrated score)
         pred_center = (pred_lo + pred_hi) / 2
         gt_center = (gt_lo + gt_hi) / 2
         gt_width = gt_hi - gt_lo
@@ -168,7 +168,7 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
         return 0.5 * iou + 0.5 * eqs
 
     else:
-        # 情况2：模型回答单值（带单位转换）
+        # case 2: the model answers with a single value (with unit conversion)
         pred_si, _ = normalize_value_with_unit(pred)
         if pred_si is None:
             return 0.0
@@ -177,10 +177,10 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
         gt_width = gt_hi - gt_lo
 
         if gt_lo <= pred_val <= gt_hi:
-            # 单值在区间内：满分
+            # single value inside the range: full score
             return 1.0
         else:
-            # 单值在区间外：使用EQS距离衰减
+            # single value outside the range: EQS distance decay
             if pred_val < gt_lo:
                 lower_error = (gt_lo - pred_val) / gt_width
                 upper_error = (gt_hi - pred_val) / gt_width
@@ -192,14 +192,14 @@ def _acc_type_b(pred: str, gt: str, gt_range=None) -> float:
             eqs_upper = math.exp(-5.0 * upper_error)
             eqs = (eqs_lower + eqs_upper) / 2.0
 
-            return eqs  # 直接返回EQS，不打折
+            return eqs  # return EQS directly, no discount
 
 
 def _acc_type_c(pred: str, gt: str) -> float:
     """
-    TYPE-C: Yes/No分类，二值评分
+    TYPE-C: Yes/No classification, binary scoring
 
-    评分逻辑：判断正确得1.0，错误得0.0
+    Scoring: 1.0 if correct, 0.0 otherwise
     """
     pred_label = _extract_binary_label(pred)
     gt_label = _extract_binary_label(gt)
@@ -209,25 +209,25 @@ def _acc_type_c(pred: str, gt: str) -> float:
 
 async def _acc_type_d_async(pred: str, gt: str, question: str) -> float:
     """
-    TYPE-D: 比较判断，使用LLM评分
+    TYPE-D: comparison judgment, scored by an LLM
 
-    评分逻辑：
-    1. GT只包含方向：方向正确1.0，错误0.0
-    2. GT包含方向+数值：方向50% + 数值精度50%
-       - 方向正确：0.5分
-       - 数值精度：最高0.5分（误差≤2%得0.5，2%-30%指数衰减，>30%得0）
-       - 若回答只有方向无数值：仅得方向分0.5（数值精度为0）
+    Scoring:
+    1. GT has a direction only: 1.0 if the direction is correct, 0.0 otherwise
+    2. GT has a direction and a number: direction 50% + numerical accuracy 50%
+       - correct direction: 0.5
+       - numerical accuracy: up to 0.5 (0.5 for error <= 2%, exponential decay for 2%-30%, 0 for > 30%)
+       - a response with a direction but no number gets only the direction score 0.5 (numerical accuracy 0)
     """
-    # 先判断GT是否包含数值
+    # first check whether the GT contains a number
     gt_has_number = _extract_number(gt) is not None
 
     if not gt_has_number:
-        # GT只有方向，使用简单判断
+        # GT has a direction only: simple check
         pred_direction = _extract_comparison_direction(pred)
         gt_direction = _extract_comparison_direction(gt)
         return 1.0 if pred_direction == gt_direction else 0.0
 
-    # GT包含方向+数值，使用LLM完整评估
+    # GT has a direction and a number: full LLM evaluation
     prompt = f"""你是物理推理评估专家。请评估学生的比较判断答案。
 
 **问题：**
@@ -284,14 +284,14 @@ async def _acc_type_d_async(pred: str, gt: str, question: str) -> float:
 
         result = response.json()
 
-        # Debug: 如果返回格式不对，打印出来
+        # Debug: print the response if its format is wrong
         if 'choices' not in result:
-            logger.error(f"API返回格式错误: {result}")
-            raise ValueError(f"API返回缺少choices字段: {result}")
+            logger.error(f"Unexpected API response format: {result}")
+            raise ValueError(f"API response has no choices field: {result}")
 
         content = result['choices'][0]['message']['content'].strip()
 
-        # 提取JSON
+        # extract JSON
         if '```json' in content:
             content = content.split('```json')[1].split('```')[0].strip()
         elif '```' in content:
@@ -305,13 +305,13 @@ async def _acc_type_d_async(pred: str, gt: str, question: str) -> float:
 
 async def calculate_scs(results: List[Dict]) -> float:
     """
-    计算推理链覆盖分（SCS）- LLM评分
+    Solution chain score (SCS), scored by an LLM
 
-    评分维度（4维度加权）：
-    - S_obs（物理量观测质量）：25%
-    - S_formula（物理公式正确性）：25%
-    - S_derive（推导步骤合理性）：30%
-    - S_conclude（结论逻辑性）：20%
+    Dimensions (weighted):
+    - S_obs (observation of physical quantities): 25%
+    - S_formula (correctness of physical relations): 25%
+    - S_derive (soundness of derivation steps): 30%
+    - S_conclude (logical conclusion): 20%
 
     SCS = 0.25×S_obs + 0.25×S_formula + 0.30×S_derive + 0.20×S_conclude
     """
@@ -323,7 +323,7 @@ async def calculate_scs(results: List[Dict]) -> float:
         if 'error' in result:
             continue
 
-        # 无推理链计0分
+        # no reasoning chain: score 0
         if not result.get('reasoning_chain'):
             logger.warning(f"Empty reasoning_chain, SCS=0")
             scores.append(0.0)
@@ -339,7 +339,7 @@ async def calculate_scs(results: List[Dict]) -> float:
             s_derive = judge_scores.get('S_derive', 0.0)
             s_conclude = judge_scores.get('S_conclude', 0.0)
         except Exception as e:
-            logger.warning(f"LLM-Judge评分失败，SCS置零: {e}")
+            logger.warning(f"LLM-judge scoring failed, SCS set to 0: {e}")
             s_obs = s_formula = s_derive = s_conclude = 0.0
 
         scs = 0.25 * s_obs + 0.25 * s_formula + 0.30 * s_derive + 0.20 * s_conclude
@@ -350,15 +350,15 @@ async def calculate_scs(results: List[Dict]) -> float:
 
 async def _llm_judge_reasoning(reasoning: str, gt_solution: str) -> Dict[str, float]:
     """
-    使用LLM评估推理链质量
+    Evaluate the quality of the reasoning chain with an LLM
 
-    对比学生的推理链与标准推理链（Ground Truth）
+    Compares the model's reasoning chain with the reference (ground-truth) chain
 
-    评估维度（每个维度5档评分：0/0.25/0.5/0.75/1.0）：
-    - S_obs: 物理量观测质量
-    - S_formula: 物理公式正确性
-    - S_derive: 推导步骤合理性
-    - S_conclude: 结论逻辑性
+    Dimensions (each on a 5-level scale: 0/0.25/0.5/0.75/1.0):
+    - S_obs: observation of physical quantities
+    - S_formula: correctness of physical relations
+    - S_derive: soundness of derivation steps
+    - S_conclude: logical conclusion
     """
     judge_prompt = f"""你是一位物理推理评估专家。请对比学生的推理链与标准推理链（Ground Truth），评估学生推理链的质量。
 
@@ -430,7 +430,7 @@ async def _llm_judge_reasoning(reasoning: str, gt_solution: str) -> Dict[str, fl
             result = response.json()
             content = result['choices'][0]['message']['content'].strip()
 
-            # 提取JSON（可能包含markdown代码块）
+            # extract JSON (may be inside a markdown code block)
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0].strip()
             elif "```" in content:
@@ -438,7 +438,7 @@ async def _llm_judge_reasoning(reasoning: str, gt_solution: str) -> Dict[str, fl
 
             parsed = json.loads(content)
 
-            # 验证分数范围
+            # validate score ranges
             valid_scores = {0.0, 0.25, 0.5, 0.75, 1.0}
             for key in ['S_obs', 'S_formula', 'S_derive', 'S_conclude']:
                 if key not in parsed:
@@ -446,39 +446,39 @@ async def _llm_judge_reasoning(reasoning: str, gt_solution: str) -> Dict[str, fl
                 score = parsed[key]
                 parsed[key] = min(valid_scores, key=lambda x: abs(x - score))
 
-            # 移除explanation字段
+            # drop the explanation field
             parsed.pop('explanation', None)
 
             return parsed
 
     except json.JSONDecodeError as e:
-        logger.error(f"LLM-Judge返回JSON解析失败: {content[:200]}")
+        logger.error(f"Failed to parse LLM-judge JSON: {content[:200]}")
         raise
     except Exception as e:
-        logger.error(f"LLM-Judge调用失败: {e}")
+        logger.error(f"LLM-judge call failed: {e}")
         raise
 
 
 def calculate_tua(results: List[Dict]) -> float:
     """
-    计算工具调用准确性（TUA†）- 不参与评分，恒返回 0.0
+    Tool-use accuracy (TUA†): not part of the score, always returns 0.0
     """
     return 0.0
 
 
 def calculate_ogs(acc: float, scs: float) -> float:
     """
-    计算综合得分（OGS）
+    Overall score (OGS)
 
     OGS = 0.70 × ACC + 0.30 × SCS
     """
     return 0.70 * acc + 0.30 * scs
 
 
-# ============ 辅助函数 ============
+# ============ helpers ============
 
 
-# 单位转换字典（转换为SI单位）
+# unit conversion table (to SI units)
 UNIT_CONVERSIONS = {
     'cm': 0.01, 'mm': 0.001, 'km': 1000, 'm': 1,
     'g': 0.001, 'kg': 1, 'mg': 0.000001,
@@ -489,7 +489,7 @@ UNIT_CONVERSIONS = {
 }
 
 def normalize_value_with_unit(text: str) -> tuple:
-    """从文本中提取数值和单位，并转换为SI单位"""
+    """Extract a number and its unit from text and convert it to SI units"""
     if not text:
         return (None, None)
     patterns = [
@@ -511,7 +511,7 @@ def normalize_value_with_unit(text: str) -> tuple:
         return (float(match.group(1)), None)
     return (None, None)
 
-# 区间解析：数值可带 e 记数法；以 "to" 连接时允许负号（"-" 连接时 "-" 是分隔符）
+# range parsing: numbers may use e-notation; negative signs are allowed with "to" (with "-", "-" is the separator)
 _RNUM = r'(?<![\w.])([0-9]+\.?[0-9]*(?:[eE][-+]?[0-9]+)?)'
 _RSNUM = r'(?<![\w.])(-?[0-9]+\.?[0-9]*(?:[eE][-+]?[0-9]+)?)'
 _RUNIT = r'(?!(?:to|and)\b)([a-zA-Z°%][a-zA-Z/°%²³]*)'
@@ -519,7 +519,7 @@ _RKNOWN = r'(m/s|km/h|cm/s|kJ|mJ|kN|cm|mm|km|mg|kg|ms|min|J|N|m|g|s|h)'
 _RSEP = r'\s*(?:[-~]|\bto\b)\s*'
 _SUP = str.maketrans('⁰¹²³⁴⁵⁶⁷⁸⁹⁻⁺', '0123456789-+')
 _RANGE_PATTERNS = [
-    # (优先级, 正则, 类型)；同一位置先取带单位的写法
+    # (priority, regex, kind); at the same position the form with units wins
     (0, _RNUM + _RSEP + _RNUM + r'\s*' + _RKNOWN, 'unit'),                         # X - Y J
     (0, _RSNUM + r'\s+to\s+' + _RSNUM + r'\s*' + _RKNOWN, 'unit'),                 # -0.3 to 0.6 m/s
     (0, _RNUM + r'\s*' + _RUNIT + _RSEP + _RNUM + r'\s*' + _RUNIT, 'both'),         # 440.64 J to 609.12 J
@@ -541,7 +541,7 @@ def _range_from_match(m, kind):
     if kind == 'between':
         u1, u2 = u1 or u2, u2 or u1
         return (v1 * UNIT_CONVERSIONS.get(u1, 1), v2 * UNIT_CONVERSIONS.get(u2, 1), u2)
-    if u1 in UNIT_CONVERSIONS and u2 in UNIT_CONVERSIONS:   # 两端单位分别换算
+    if u1 in UNIT_CONVERSIONS and u2 in UNIT_CONVERSIONS:   # convert each endpoint by its own unit
         return (v1 * UNIT_CONVERSIONS[u1], v2 * UNIT_CONVERSIONS[u2], u2)
     if u1 == u2:
         return (v1, v2, u2)
@@ -549,14 +549,14 @@ def _range_from_match(m, kind):
 
 
 def normalize_range_with_unit(text: str) -> tuple:
-    """从文本中提取区间并转换为SI单位
-    区间两端都带单位（"440.64 J to 609.12 J"、"6.12 J - 6.60 J"）、"X to Y unit"、"between X and Y"、
-    负下界（"-0.304 to 0.590"）与 e 记数法都按区间解析。
-    取文本中最早出现的区间；同一位置优先带单位的写法"""
+    """Extract a range from text and convert it to SI units
+    Ranges with units on both ends ("440.64 J to 609.12 J", "6.12 J - 6.60 J"), "X to Y unit", "between X and Y",
+    negative lower bounds ("-0.304 to 0.590") and e-notation are all parsed as ranges.
+    The earliest range in the text is taken; at the same position the form with units wins"""
     if not text:
         return (None, None, None)
     text_clean = text.replace('–', '-').replace('—', '-').replace('−', '-')
-    text_clean = re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', text_clean)  # 千分位逗号
+    text_clean = re.sub(r'(?<=\d),(?=\d{3}(?!\d))', '', text_clean)  # thousands separators
     text_clean = re.sub(r'([0-9]+\.?[0-9]*)\s*[x×*·]\s*10(?:\s*\^\s*(?:\(\s*([-+]?[0-9]+)\s*\)|([-+]?[0-9]+))|([⁻⁺]?[⁰¹²³⁴⁵⁶⁷⁸⁹]+))',
                         lambda m: m.group(1) + 'e' + (m.group(2) or m.group(3) or m.group(4).translate(_SUP)), text_clean)  # 8.9 x 10^-6
     best = None
@@ -572,7 +572,7 @@ def normalize_range_with_unit(text: str) -> tuple:
 
 
 def _extract_number(text: str) -> Optional[float]:
-    """从干净的短文本中提取数值（用于 ground truth）"""
+    """Extract a number from a short clean text (used for the ground truth)"""
     text = re.sub(r'[a-zA-Z°]+', ' ', text)
     match = re.search(r'-?\d+\.?\d*(?:[eE][+-]?\d+)?', text)
     return float(match.group()) if match else None
@@ -580,21 +580,21 @@ def _extract_number(text: str) -> Optional[float]:
 
 def _extract_final_number(text: str) -> Optional[float]:
     """
-    从模型输出中提取最终答案数值（用于 prediction）
+    Extract the final numerical answer from the model output (used for the prediction)
 
-    策略：
-    1. 剥离 <think>...</think> 块
-    2. 优先查找结论性短语附近的数值
-    3. 回退到取文本末尾的最后一个合理数值
+    Strategy:
+    1. strip the <think>...</think> block
+    2. prefer a number right after a concluding phrase
+    3. fall back to the last plausible number at the end of the text
     """
-    # Step 1: 剥离 <think> 块
+    # Step 1: strip the <think> block
     if not text or text is None:
         return None
     clean = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL).strip()
     if not clean:
         clean = text
 
-    # Step 2: 结论性短语紧跟数值
+    # Step 2: a concluding phrase followed by a number
     conclusion_patterns = [
         r'(?:final\s+answer|answer\s+is|result\s+is|equals?|≈|≒)\s*[:\s]*(-?\d+\.?\d*(?:[eE][+-]?\d+)?)',
         r'approximately\s+\*{0,2}?\$?(-?\d+\.?\d*(?:[eE][+-]?\d+)?)',
@@ -610,7 +610,7 @@ def _extract_final_number(text: str) -> Optional[float]:
             except ValueError:
                 continue
 
-    # Step 3: 取文本末尾最后一个合理数值
+    # Step 3: the last plausible number at the end of the text
     tail = clean[-600:] if len(clean) > 600 else clean
     nums = re.findall(r'-?\d+\.?\d*(?:[eE][+-]?\d+)?', tail)
     for n in reversed(nums):
@@ -631,13 +631,13 @@ def _extract_final_number(text: str) -> Optional[float]:
 
 
 def _extract_range(text: str) -> Optional[tuple]:
-    """从文本中提取区间 [lo, hi]"""
-    # 匹配带括号的标准区间
+    """Extract a range [lo, hi] from text"""
+    # match a bracketed range
     m = re.search(r'[\[\(]\s*(-?\d+\.?\d*)\s*[,~–—-]\s*(-?\d+\.?\d*)\s*[\]\)]', text)
     if m:
         return float(m.group(1)), float(m.group(2))
 
-    # "X to Y" 或 "X - Y" 等
+    # "X to Y", "X - Y", etc.
     m = re.search(r'(-?\d+\.?\d*)\s*(?:[-,~–—]|\s+to\s+)\s*(-?\d+\.?\d*)', text, re.IGNORECASE)
     if m:
         return float(m.group(1)), float(m.group(2))
@@ -651,7 +651,7 @@ def _extract_range(text: str) -> Optional[tuple]:
 
 
 def _extract_binary_label(text: str) -> Optional[str]:
-    """提取Yes/No标签"""
+    """Extract a Yes/No label"""
     text_lower = text.lower()
     if 'yes' in text_lower or 'true' in text_lower or 'correct' in text_lower:
         return 'yes'
@@ -661,7 +661,7 @@ def _extract_binary_label(text: str) -> Optional[str]:
 
 
 def _extract_comparison_direction(text: str) -> Optional[str]:
-    """提取比较方向（greater/less/equal）"""
+    """Extract the comparison direction (greater/less/equal)"""
     text_lower = text.lower()
     if any(kw in text_lower for kw in ['faster', 'quicker', 'greater', 'larger', 'more', 'higher']):
         return 'greater'
@@ -675,11 +675,11 @@ def _extract_comparison_direction(text: str) -> Optional[str]:
 
 async def calculate_scs_detailed(results: List[Dict]) -> Dict:
     """
-    计算SCS分数并返回详细子分数
+    Compute SCS and return the sub-scores
     Returns:
         {
-            'overall': float,  # 总分
-            'details': {       # 子分数
+            'overall': float,  # overall score
+            'details': {       # sub-scores
                 'S_obs': float,
                 'S_formula': float,
                 'S_derive': float,
@@ -694,24 +694,24 @@ async def calculate_scs_detailed(results: List[Dict]) -> Dict:
     if not valid_results:
         return {'overall': 0.0, 'details': None}
 
-    result = valid_results[0]  # 单题计算
+    result = valid_results[0]  # a single question
 
-    # 检查是否有推理链和标准答案
+    # check that a reasoning chain and a reference answer exist
     reasoning = result.get('reasoning_chain', [])
     gt_solution = result.get('annotated_solution', '')
 
     if not reasoning or not gt_solution:
         return {'overall': 0.0, 'details': None}
 
-    # 如果reasoning_chain是列表，转成字符串
+    # reasoning_chain given as a list: join into a string
     if isinstance(reasoning, list):
         reasoning = '\n'.join(reasoning)
 
     try:
-        # 调用LLM评分，获取4个维度的分数
+        # call the LLM judge for the 4 dimension scores
         judge_scores = await _llm_judge_reasoning(reasoning, gt_solution)
 
-        # 计算加权总分
+        # weighted total
         overall = (
             judge_scores['S_obs'] * 0.25 +
             judge_scores['S_formula'] * 0.25 +
@@ -737,8 +737,8 @@ async def llm_evaluate_raw_response(
     answer_range = None
 ) -> Dict[str, Any]:
     """
-    当模型没有输出<answer>标签时，使用LLM从raw_response评测ACC和SCS（单步版本；评测使用两步版本
-    llm_two_step_eval.llm_evaluate_raw_response_two_step）
+    When the model outputs no <answer> tag, evaluate ACC and SCS from raw_response with an LLM (single-step version; evaluation uses the two-step
+    version llm_two_step_eval.llm_evaluate_raw_response_two_step)
     """
 
     type_rules = {
@@ -836,7 +836,7 @@ Output JSON only (no markdown blocks):
         result = response.json()
         content_text = result['choices'][0]['message']['content']
 
-        # 解析JSON（处理Markdown）
+        # parse JSON (handles Markdown)
         import json
         logger.info(f"  [LLM] Response: {content_text[:200]}")
         json_text = content_text.strip()
@@ -870,17 +870,17 @@ Output JSON only (no markdown blocks):
 
 
 async def calculate_acc_with_fallback(result: Dict) -> float:
-    """计算ACC，支持LLM fallback"""
+    """Compute ACC, with LLM fallback"""
     prediction = result.get('prediction')
 
-    # 有prediction，正常计算
+    # prediction available: normal scoring
     if prediction:
         try:
             return await calculate_acc_async([result])
         except:
             pass
 
-    # 无prediction，检查是否需要LLM评测
+    # no prediction: check whether LLM evaluation is needed
     if result.get('needs_llm_eval'):
         try:
             eval_result = await llm_evaluate_raw_response_two_step(
@@ -903,17 +903,17 @@ async def calculate_acc_with_fallback(result: Dict) -> float:
 
 
 async def calculate_scs_with_fallback(result: Dict) -> Dict:
-    """计算SCS，支持LLM fallback"""
+    """Compute SCS, with LLM fallback"""
     reasoning = result.get('reasoning_chain')
 
-    # 有reasoning_chain，正常计算
+    # reasoning_chain available: normal scoring
     if reasoning:
         try:
             return await calculate_scs_detailed([result])
         except:
             pass
 
-    # 无reasoning_chain，检查是否需要LLM评测
+    # no reasoning_chain: check whether LLM evaluation is needed
     if result.get('needs_llm_eval'):
         try:
             eval_result = await llm_evaluate_raw_response_two_step(

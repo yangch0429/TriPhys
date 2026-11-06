@@ -1,4 +1,4 @@
-"""Prompt定义 - System + User分离"""
+"""Prompt definitions: separate system and user prompts"""
 
 SYSTEM_PROMPT = """You are an expert multimodal AI assistant specializing in physics reasoning and quantitative analysis of video content. You should think step by step to answer the question. You may use available tools to assist with your analysis if needed.
 
@@ -22,13 +22,13 @@ Final answer: [your answer]
 
 
 def build_user_prompt(question: str, question_type: str) -> str:
-    """构建 user prompt，根据题型添加格式要求"""
+    """Build the user prompt, adding the format requirement for the answer type"""
     
     prompt = f"""Question: {question}
 
 """
     
-    # 根据题型添加格式说明
+    # add the format instruction for the answer type
     if question_type == "TYPE_A":
         prompt += """Answer format: Provide a numerical value with appropriate unit (e.g., "10.5 J", "3.2 m/s").
 
